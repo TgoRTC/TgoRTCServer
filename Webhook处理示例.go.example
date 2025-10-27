@@ -1,0 +1,240 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"log"
+	"os"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
+	"github.com/livekit/protocol/webhook"
+)
+
+// Redis 客户端
+var redisClient *redis.Client
+
+// 初始化 Redis
+func initRedis() {
+	redisClient = redis.NewClient(&redis.Options{
+		Addr:     os.Getenv("REDIS_HOST") + ":" + os.Getenv("REDIS_PORT"),
+		Password: os.Getenv("REDIS_PASSWORD"),
+		DB:       0,
+	})
+
+	// 测试连接
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := redisClient.Ping(ctx).Err(); err != nil {
+		log.Fatalf("Redis 连接失败: %v", err)
+	}
+
+	log.Println("Redis 连接成功")
+}
+
+// Webhook 处理函数
+// POST /api/webhook
+func HandleWebhook(c *gin.Context) {
+	// 读取请求体
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		log.Printf("读取请求体失败: %v", err)
+		c.JSON(400, gin.H{"error": "读取请求体失败"})
+		return
+	}
+
+	// 获取 Authorization 头
+	authHeader := c.Request.Header.Get("Authorization")
+
+	// 验证 Webhook 签名
+	apiSecret := os.Getenv("LIVEKIT_API_SECRET")
+	event, err := webhook.ParseEvent(apiSecret, authHeader, body)
+	if err != nil {
+		log.Printf("Webhook 签名验证失败: %v", err)
+		c.JSON(401, gin.H{"error": "签名验证失败"})
+		return
+	}
+
+	// 生成事件 ID（用于去重）
+	eventID := fmt.Sprintf("webhook:%d:%s", event.CreatedAt, event.Event)
+
+	// 使用 Redis 检查是否已处理过（去重）
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	exists, err := redisClient.Exists(ctx, eventID).Result()
+	if err != nil {
+		log.Printf("Redis 查询失败: %v", err)
+		c.JSON(500, gin.H{"error": "Redis 查询失败"})
+		return
+	}
+
+	if exists > 0 {
+		// 已处理过，直接返回
+		log.Printf("事件已处理过，跳过: %s", eventID)
+		c.JSON(200, gin.H{"status": "ok", "message": "事件已处理过"})
+		return
+	}
+
+	// 处理事件
+	handleEvent(event)
+
+	// 标记为已处理（设置 1 小时过期）
+	err = redisClient.Set(ctx, eventID, "1", time.Hour).Err()
+	if err != nil {
+		log.Printf("Redis 设置失败: %v", err)
+		c.JSON(500, gin.H{"error": "Redis 设置失败"})
+		return
+	}
+
+	c.JSON(200, gin.H{"status": "ok"})
+}
+
+// 处理不同的事件类型
+func handleEvent(event *webhook.WebhookEvent) {
+	switch e := event.Event.(type) {
+	case *webhook.WebhookEvent_RoomStarted:
+		handleRoomStarted(e.RoomStarted)
+
+	case *webhook.WebhookEvent_RoomFinished:
+		handleRoomFinished(e.RoomFinished)
+
+	case *webhook.WebhookEvent_ParticipantJoined:
+		handleParticipantJoined(e.ParticipantJoined)
+
+	case *webhook.WebhookEvent_ParticipantLeft:
+		handleParticipantLeft(e.ParticipantLeft)
+
+	case *webhook.WebhookEvent_TrackPublished:
+		handleTrackPublished(e.TrackPublished)
+
+	case *webhook.WebhookEvent_TrackUnpublished:
+		handleTrackUnpublished(e.TrackUnpublished)
+
+	case *webhook.WebhookEvent_RecordingFinished:
+		handleRecordingFinished(e.RecordingFinished)
+
+	default:
+		log.Printf("未知事件类型: %T", event.Event)
+	}
+}
+
+// 房间创建事件
+func handleRoomStarted(event *webhook.RoomStartedEvent) {
+	log.Printf("房间已创建: %s", event.Room.Name)
+	// 在这里添加你的业务逻辑
+	// 例如：记录到数据库、发送通知等
+}
+
+// 房间销毁事件
+func handleRoomFinished(event *webhook.RoomFinishedEvent) {
+	log.Printf("房间已销毁: %s", event.Room.Name)
+	// 在这里添加你的业务逻辑
+	// 例如：清理资源、生成报告等
+}
+
+// 参与者加入事件
+func handleParticipantJoined(event *webhook.ParticipantJoinedEvent) {
+	log.Printf("参与者加入: %s (房间: %s)", event.Participant.Name, event.Room.Name)
+	// 在这里添加你的业务逻辑
+	// 例如：更新在线人数、发送通知等
+}
+
+// 参与者离开事件
+func handleParticipantLeft(event *webhook.ParticipantLeftEvent) {
+	log.Printf("参与者离开: %s (房间: %s)", event.Participant.Name, event.Room.Name)
+	// 在这里添加你的业务逻辑
+	// 例如：更新在线人数、清理资源等
+}
+
+// 媒体轨道发布事件
+func handleTrackPublished(event *webhook.TrackPublishedEvent) {
+	log.Printf("媒体轨道发布: %s (参与者: %s, 房间: %s)",
+		event.Track.Name, event.Participant.Name, event.Room.Name)
+	// 在这里添加你的业务逻辑
+}
+
+// 媒体轨道取消发布事件
+func handleTrackUnpublished(event *webhook.TrackUnpublishedEvent) {
+	log.Printf("媒体轨道取消发布: %s (参与者: %s, 房间: %s)",
+		event.Track.Name, event.Participant.Name, event.Room.Name)
+	// 在这里添加你的业务逻辑
+}
+
+// 录制完成事件
+func handleRecordingFinished(event *webhook.RecordingFinishedEvent) {
+	log.Printf("录制完成: %s (房间: %s)", event.RecordingUrl, event.Room.Name)
+	// 在这里添加你的业务逻辑
+	// 例如：处理录制文件、上传到存储等
+}
+
+// 健康检查
+func healthCheck(c *gin.Context) {
+	c.JSON(200, gin.H{
+		"status": "ok",
+		"redis":  "connected",
+	})
+}
+
+func main() {
+	// 初始化 Redis
+	initRedis()
+	defer redisClient.Close()
+
+	// 创建 Gin 路由
+	router := gin.Default()
+
+	// Webhook 接收端点
+	router.POST("/api/webhook", HandleWebhook)
+
+	// 健康检查
+	router.GET("/health", healthCheck)
+
+	// 启动服务器
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	log.Printf("在端口 %s 启动 Webhook 服务器", port)
+	if err := router.Run(":" + port); err != nil {
+		log.Fatalf("启动服务器失败: %v", err)
+	}
+}
+
+/*
+使用步骤：
+
+1. 设置环境变量
+   export LIVEKIT_API_SECRET=your_api_secret
+   export REDIS_HOST=localhost
+   export REDIS_PORT=6379
+   export REDIS_PASSWORD=
+   export PORT=8080
+
+2. 运行服务器
+   go run Webhook处理示例.go
+
+3. 在 .env 中配置 Webhook
+   WEBHOOK_ENABLED=true
+   WEBHOOK_URLS=https://livekit.example.com/api/webhook
+   WEBHOOK_API_KEY=your_api_key
+
+4. 重启 LiveKit
+   ./部署.sh restart
+
+5. 测试 Webhook
+   curl -X POST http://localhost:8080/api/webhook \
+     -H "Content-Type: application/json" \
+     -d '{...}'
+
+关键特性：
+- ✅ 自动验证 Webhook 签名
+- ✅ 使用 Redis 去重（防止重复处理）
+- ✅ 支持所有事件类型
+- ✅ 易于扩展
+*/
+
