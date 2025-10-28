@@ -54,16 +54,6 @@ migrations/
    - 每个迁移的执行情况都会记录在 `migrations` 表中
    - 包括版本号、名称、SQL 语句、执行状态、执行时间等
 
-3. **查询迁移状态**
-   ```bash
-   curl http://localhost:8080/api/migrations/status
-   ```
-
-4. **查询迁移历史**
-   ```bash
-   curl http://localhost:8080/api/migrations/history
-   ```
-
 ## 优势
 
 ✅ **单一数据源** - SQL 脚本只需维护一份，在 `migrations/` 目录中
@@ -141,5 +131,4 @@ A: 检查 `migrations` 表中的 `error` 字段查看错误信息，修复问题
 - `internal/database/migration.go` - 迁移管理器实现
 - `internal/database/migrations.go` - 迁移脚本定义
 - `internal/database/db.go` - 数据库初始化
-- `internal/handler/migration_handler.go` - 迁移管理 API
 

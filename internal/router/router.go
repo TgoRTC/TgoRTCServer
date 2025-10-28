@@ -2,7 +2,6 @@ package router
 
 import (
 	"tgo-call-server/internal/config"
-	"tgo-call-server/internal/database"
 	"tgo-call-server/internal/handler"
 	"tgo-call-server/internal/livekit"
 	"tgo-call-server/internal/middleware"
@@ -27,13 +26,9 @@ func SetupRouter(db *gorm.DB, redisClient *redis.Client, cfg *config.Config) *gi
 	roomService := service.NewRoomService(db, tokenGenerator)
 	participantService := service.NewParticipantService(db, tokenGenerator)
 
-	// 初始化迁移管理器
-	migrationManager := database.NewMigrationManager(db)
-
 	// 初始化处理器
 	roomHandler := handler.NewRoomHandler(roomService)
 	participantHandler := handler.NewParticipantHandler(participantService)
-	migrationHandler := handler.NewMigrationHandler(migrationManager)
 
 	// 健康检查
 	router.GET("/health", func(c *gin.Context) {
@@ -58,13 +53,6 @@ func SetupRouter(db *gorm.DB, redisClient *redis.Client, cfg *config.Config) *gi
 		participants := api.Group("/participants")
 		{
 			participants.POST("/calling", participantHandler.CheckUserCallStatus) // 查询正在通话的成员
-		}
-
-		// 迁移管理接口
-		migrations := api.Group("/migrations")
-		{
-			migrations.GET("/history", migrationHandler.GetMigrationHistory) // 获取迁移历史
-			migrations.GET("/status", migrationHandler.GetMigrationStatus)   // 获取迁移状态
 		}
 	}
 
