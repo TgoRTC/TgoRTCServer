@@ -63,8 +63,8 @@ func (ps *ParticipantService) JoinRoom(req *models.JoinRoomRequest) (*models.Joi
 		return nil, fmt.Errorf("查询参与者失败: %w", err)
 	}
 
-	// 生成 Token
-	token, err := ps.tokenGenerator.GenerateToken(req.RoomID, req.UID)
+	// 生成 Token 和获取配置信息
+	tokenResult, err := ps.tokenGenerator.GenerateTokenWithConfig(req.RoomID, req.UID)
 	if err != nil {
 		return nil, fmt.Errorf("生成 Token 失败: %w", err)
 	}
@@ -72,12 +72,12 @@ func (ps *ParticipantService) JoinRoom(req *models.JoinRoomRequest) (*models.Joi
 	return &models.JoinRoomResponse{
 		RoomID:          req.RoomID,
 		Creator:         room.Creator,
-		Token:           token,
-		URL:             "http://localhost:7880", // 应该从配置读取
+		Token:           tokenResult.Token,
+		URL:             tokenResult.URL,
 		Status:          room.Status,
 		CreatedAt:       ps.timeFormatter.FormatDateTime(room.CreatedAt),
 		MaxParticipants: room.MaxParticipants,
-		Timeout:         3600, // 默认超时时间（秒）
+		Timeout:         tokenResult.Timeout,
 	}, nil
 }
 

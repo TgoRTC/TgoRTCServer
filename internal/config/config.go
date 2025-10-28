@@ -29,6 +29,7 @@ type Config struct {
 	LiveKitURL       string
 	LiveKitAPIKey    string
 	LiveKitAPISecret string
+	LiveKitTimeout   int // 单位：秒
 
 	// Webhook 配置
 	WebhookEnabled bool
@@ -46,6 +47,13 @@ func LoadConfig() *Config {
 	if db := os.Getenv("REDIS_DB"); db != "" {
 		if d, err := strconv.Atoi(db); err == nil {
 			redisDB = d
+		}
+	}
+
+	liveKitTimeout := 3600 // 默认 1 小时
+	if timeout := os.Getenv("LIVEKIT_TIMEOUT"); timeout != "" {
+		if t, err := strconv.Atoi(timeout); err == nil {
+			liveKitTimeout = t
 		}
 	}
 
@@ -72,6 +80,7 @@ func LoadConfig() *Config {
 		LiveKitURL:       getEnv("LIVEKIT_URL", "http://localhost:7880"),
 		LiveKitAPIKey:    getEnv("LIVEKIT_API_KEY", ""),
 		LiveKitAPISecret: getEnv("LIVEKIT_API_SECRET", ""),
+		LiveKitTimeout:   liveKitTimeout,
 
 		// Webhook 配置
 		WebhookEnabled: webhookEnabled,
@@ -86,4 +95,3 @@ func getEnv(key, defaultValue string) string {
 	}
 	return defaultValue
 }
-

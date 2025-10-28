@@ -141,8 +141,8 @@ func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.Create
 		return nil, fmt.Errorf("提交事务失败: %w", err)
 	}
 
-	// 生成 Token
-	token, err := rs.tokenGenerator.GenerateToken(roomID, req.Creator)
+	// 生成 Token 和获取配置信息
+	tokenResult, err := rs.tokenGenerator.GenerateTokenWithConfig(roomID, req.Creator)
 	if err != nil {
 		return nil, fmt.Errorf("生成 Token 失败: %w", err)
 	}
@@ -150,11 +150,11 @@ func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.Create
 	return &models.CreateRoomResponse{
 		RoomID:          roomID,
 		Creator:         req.Creator,
-		Token:           token,
-		URL:             "http://localhost:7880", // 应该从配置读取
+		Token:           tokenResult.Token,
+		URL:             tokenResult.URL,
 		Status:          room.Status,
 		CreatedAt:       rs.timeFormatter.FormatDateTime(room.CreatedAt),
 		MaxParticipants: maxParticipants,
-		Timeout:         3600, // 默认超时时间（秒）
+		Timeout:         tokenResult.Timeout,
 	}, nil
 }
