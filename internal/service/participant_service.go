@@ -138,6 +138,34 @@ func (ps *ParticipantService) InviteParticipants(req *models.InviteParticipantRe
 	return nil
 }
 
+// CheckUserCallStatus 检查用户是否正在通话
+// 只查询 status=0(邀请中) 或 status=1(已加入) 的数据
+func (ps *ParticipantService) CheckUserCallStatus(uids []string) ([]string, error) {
+	if len(uids) == 0 {
+		return []string{}, nil
+	}
+
+	var participants []models.Participant
+	// 查询 status=0(邀请中) 或 status=1(已加入) 的参与者
+	if err := ps.db.Where("uid IN ? AND (status = ? OR status = ?)", uids, models.ParticipantStatusInviting, models.ParticipantStatusJoined).
+		Find(&participants).Error; err != nil {
+		return nil, fmt.Errorf("查询用户通话状态失败: %w", err)
+	}
+
+	// 提取 UID 列表，去重
+	uidMap := make(map[string]bool)
+	for _, p := range participants {
+		uidMap[p.UID] = true
+	}
+
+	result := make([]string, 0, len(uidMap))
+	for uid := range uidMap {
+		result = append(result, uid)
+	}
+
+	return result, nil
+}
+
 // UpdateParticipantStatus 更新参与者状态
 func (ps *ParticipantService) UpdateParticipantStatus(roomID, uid string, status int16) error {
 	if err := ps.db.Model(&models.Participant{}).

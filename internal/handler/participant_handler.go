@@ -217,3 +217,43 @@ func (ph *ParticipantHandler) UpdateParticipantStatus(c *gin.Context) {
 
 	c.JSON(http.StatusNoContent, nil)
 }
+
+// CheckUserCallStatus 检查用户是否正在通话
+// POST /api/participants/check-call-status
+func (ph *ParticipantHandler) CheckUserCallStatus(c *gin.Context) {
+	logger := utils.GetLogger()
+
+	var req models.CheckUserCallStatusRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.Error("检查用户通话状态参数绑定失败",
+			zap.Error(err),
+		)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code": 400,
+			"msg":  "参数错误",
+		})
+		return
+	}
+
+	uids, err := ph.participantService.CheckUserCallStatus(req.UIDs)
+	if err != nil {
+		logger.Error("检查用户通话状态系统错误",
+			zap.Error(err),
+			zap.Strings("uids", req.UIDs),
+		)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": 500,
+			"msg":  err.Error(),
+		})
+		return
+	}
+
+	// 如果没有正在通话的用户，返回空数组而不是 nil
+	if uids == nil {
+		uids = []string{}
+	}
+
+	c.JSON(http.StatusOK, models.CheckUserCallStatusResponse{
+		UIDs: uids,
+	})
+}

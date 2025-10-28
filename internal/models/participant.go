@@ -75,3 +75,13 @@ type GetParticipantsResponse struct {
 type UpdateParticipantStatusRequest struct {
 	Status int `json:"status" binding:"required"`
 }
+
+// CheckUserCallStatusRequest 检查用户通话状态请求
+type CheckUserCallStatusRequest struct {
+	UIDs []string `json:"uids" binding:"required"`
+}
+
+// CheckUserCallStatusResponse 检查用户通话状态响应
+type CheckUserCallStatusResponse struct {
+	UIDs []string `json:"uids"`
+}
