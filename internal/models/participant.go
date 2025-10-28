@@ -33,8 +33,9 @@ const (
 )
 
 // JoinRoomRequest 加入房间请求
+// room_id 从 URL 参数中获取: POST /api/v1/rooms/:room_id/join
 type JoinRoomRequest struct {
-	RoomID string `json:"room_id" binding:"required"`
+	RoomID string `json:"room_id"` // 从 URL 参数中设置
 	UID    string `json:"uid" binding:"required"`
 }
 
@@ -48,8 +49,9 @@ type JoinRoomResponse struct {
 }
 
 // LeaveRoomRequest 离开房间请求
+// room_id 从 URL 参数中获取: POST /api/v1/rooms/:room_id/leave
 type LeaveRoomRequest struct {
-	RoomID string `json:"room_id" binding:"required"`
+	RoomID string `json:"room_id"` // 从 URL 参数中设置
 	UID    string `json:"uid" binding:"required"`
 }
 

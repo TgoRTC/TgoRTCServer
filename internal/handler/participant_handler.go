@@ -26,15 +26,17 @@ func NewParticipantHandler(participantService *service.ParticipantService) *Part
 }
 
 // JoinRoom 参与者加入房间
-// POST /api/participants/join
+// POST /api/v1/rooms/:room_id/join
 func (ph *ParticipantHandler) JoinRoom(c *gin.Context) {
 	lang := middleware.GetLanguageFromContext(c)
 	logger := utils.GetLogger()
+	roomID := c.Param("room_id")
 
 	var req models.JoinRoomRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logger.Error("加入房间参数绑定失败",
 			zap.Error(err),
+			zap.String("room_id", roomID),
 			zap.String("language", lang),
 		)
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -43,6 +45,9 @@ func (ph *ParticipantHandler) JoinRoom(c *gin.Context) {
 		})
 		return
 	}
+
+	// 从 URL 参数中获取 room_id
+	req.RoomID = roomID
 
 	resp, err := ph.participantService.JoinRoom(&req)
 	if err != nil {
@@ -77,14 +82,16 @@ func (ph *ParticipantHandler) JoinRoom(c *gin.Context) {
 }
 
 // LeaveRoom 参与者离开房间
-// POST /api/participants/leave
+// POST /api/v1/rooms/:room_id/leave
 func (ph *ParticipantHandler) LeaveRoom(c *gin.Context) {
 	logger := utils.GetLogger()
+	roomID := c.Param("room_id")
 
 	var req models.LeaveRoomRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logger.Error("离开房间参数绑定失败",
 			zap.Error(err),
+			zap.String("room_id", roomID),
 		)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code": 400,
@@ -92,6 +99,9 @@ func (ph *ParticipantHandler) LeaveRoom(c *gin.Context) {
 		})
 		return
 	}
+
+	// 从 URL 参数中获取 room_id
+	req.RoomID = roomID
 
 	if err := ph.participantService.LeaveRoom(&req); err != nil {
 		logger.Error("离开房间系统错误",

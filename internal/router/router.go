@@ -57,15 +57,15 @@ func SetupRouter(db *gorm.DB, redisClient *redis.Client, cfg *config.Config) *gi
 			// 参与者相关接口
 			rooms.GET("/:room_id/participants", participantHandler.GetParticipants)                     // 获取参与者列表
 			rooms.POST("/:room_id/invite", participantHandler.InviteParticipants)                       // 邀请参与者
+			rooms.POST("/:room_id/join", participantHandler.JoinRoom)                                   // 加入房间
+			rooms.POST("/:room_id/leave", participantHandler.LeaveRoom)                                 // 离开房间
 			rooms.PUT("/:room_id/participants/:uid/status", participantHandler.UpdateParticipantStatus) // 更新参与者状态
 		}
 
 		// 参与者相关接口
 		participants := api.Group("/participants")
 		{
-			participants.POST("/join", participantHandler.JoinRoom)               // 加入房间
-			participants.POST("/leave", participantHandler.LeaveRoom)             // 离开房间
-			participants.POST("/calling", participantHandler.CheckUserCallStatus) // 检查用户通话状态
+			participants.POST("/check-call-status", participantHandler.CheckUserCallStatus) // 检查用户通话状态
 		}
 
 		// 迁移管理接口
