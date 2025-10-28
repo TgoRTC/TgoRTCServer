@@ -48,18 +48,10 @@ func SetupRouter(db *gorm.DB, redisClient *redis.Client, cfg *config.Config) *gi
 		// 房间相关接口
 		rooms := api.Group("/rooms")
 		{
-			rooms.POST("", roomHandler.CreateRoom)                      // 创建房间
-			rooms.GET("", roomHandler.ListRooms)                        // 列出房间列表
-			rooms.GET("/:room_id", roomHandler.GetRoom)                 // 获取房间信息
-			rooms.PUT("/:room_id/status", roomHandler.UpdateRoomStatus) // 更新房间状态
-			rooms.POST("/:room_id/end", roomHandler.EndRoom)            // 结束房间
-
-			// 参与者相关接口
-			rooms.GET("/:room_id/participants", participantHandler.GetParticipants)                     // 获取参与者列表
-			rooms.POST("/:room_id/invite", participantHandler.InviteParticipants)                       // 邀请参与者
-			rooms.POST("/:room_id/join", participantHandler.JoinRoom)                                   // 加入房间
-			rooms.POST("/:room_id/leave", participantHandler.LeaveRoom)                                 // 离开房间
-			rooms.PUT("/:room_id/participants/:uid/status", participantHandler.UpdateParticipantStatus) // 更新参与者状态
+			rooms.POST("", roomHandler.CreateRoom)                                // 创建房间
+			rooms.POST("/:room_id/invite", participantHandler.InviteParticipants) // 邀请参与者
+			rooms.POST("/:room_id/join", participantHandler.JoinRoom)             // 加入房间
+			rooms.POST("/:room_id/leave", participantHandler.LeaveRoom)           // 离开房间
 		}
 
 		// 参与者相关接口

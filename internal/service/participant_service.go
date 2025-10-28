@@ -88,30 +88,6 @@ func (ps *ParticipantService) LeaveRoom(req *models.LeaveRoomRequest) error {
 	return nil
 }
 
-// GetParticipants 获取房间内的参与者列表
-func (ps *ParticipantService) GetParticipants(roomID string) ([]models.GetParticipantsResponse, error) {
-	var participants []models.Participant
-	if err := ps.db.Where("room_id = ?", roomID).Find(&participants).Error; err != nil {
-		return nil, fmt.Errorf("查询参与者列表失败: %w", err)
-	}
-
-	var responses []models.GetParticipantsResponse
-	for _, p := range participants {
-		responses = append(responses, models.GetParticipantsResponse{
-			ID:        p.ID,
-			RoomID:    p.RoomID,
-			UID:       p.UID,
-			Status:    p.Status,
-			JoinTime:  p.JoinTime,
-			LeaveTime: p.LeaveTime,
-			CreatedAt: ps.timeFormatter.FormatDateTime(p.CreatedAt),
-			UpdatedAt: ps.timeFormatter.FormatDateTime(p.UpdatedAt),
-		})
-	}
-
-	return responses, nil
-}
-
 // InviteParticipants 邀请参与者
 func (ps *ParticipantService) InviteParticipants(req *models.InviteParticipantRequest) error {
 	// 检查房间是否存在
@@ -164,14 +140,4 @@ func (ps *ParticipantService) CheckUserCallStatus(uids []string) ([]string, erro
 	}
 
 	return result, nil
-}
-
-// UpdateParticipantStatus 更新参与者状态
-func (ps *ParticipantService) UpdateParticipantStatus(roomID, uid string, status int16) error {
-	if err := ps.db.Model(&models.Participant{}).
-		Where("room_id = ? AND uid = ?", roomID, uid).
-		Update("status", status).Error; err != nil {
-		return fmt.Errorf("更新参与者状态失败: %w", err)
-	}
-	return nil
 }

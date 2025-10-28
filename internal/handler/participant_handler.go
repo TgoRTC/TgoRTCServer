@@ -119,23 +119,6 @@ func (ph *ParticipantHandler) LeaveRoom(c *gin.Context) {
 	c.JSON(http.StatusNoContent, nil)
 }
 
-// GetParticipants 获取房间内的参与者列表
-// GET /api/rooms/:room_id/participants
-func (ph *ParticipantHandler) GetParticipants(c *gin.Context) {
-	roomID := c.Param("room_id")
-
-	participants, err := ph.participantService.GetParticipants(roomID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code": 500,
-			"msg":  err.Error(),
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, participants)
-}
-
 // InviteParticipants 邀请参与者
 // POST /api/rooms/:room_id/invite
 func (ph *ParticipantHandler) InviteParticipants(c *gin.Context) {
@@ -184,44 +167,6 @@ func (ph *ParticipantHandler) InviteParticipants(c *gin.Context) {
 				"msg":  err.Error(),
 			})
 		}
-		return
-	}
-
-	c.JSON(http.StatusNoContent, nil)
-}
-
-// UpdateParticipantStatus 更新参与者状态
-// PUT /api/rooms/:room_id/participants/:uid/status
-func (ph *ParticipantHandler) UpdateParticipantStatus(c *gin.Context) {
-	logger := utils.GetLogger()
-	roomID := c.Param("room_id")
-	uid := c.Param("uid")
-
-	var req models.UpdateParticipantStatusRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		logger.Error("更新参与者状态参数绑定失败",
-			zap.Error(err),
-			zap.String("room_id", roomID),
-			zap.String("uid", uid),
-		)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code": 400,
-			"msg":  "参数错误",
-		})
-		return
-	}
-
-	if err := ph.participantService.UpdateParticipantStatus(roomID, uid, int16(req.Status)); err != nil {
-		logger.Error("更新参与者状态系统错误",
-			zap.Error(err),
-			zap.String("room_id", roomID),
-			zap.String("uid", uid),
-			zap.Int("status", req.Status),
-		)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code": 500,
-			"msg":  err.Error(),
-		})
 		return
 	}
 
