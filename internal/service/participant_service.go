@@ -38,7 +38,9 @@ func (ps *ParticipantService) JoinRoom(req *models.JoinRoomRequest) (*models.Joi
 		}
 		return nil, fmt.Errorf("查询房间失败: %w", err)
 	}
+	if room.Status == models.RoomStatusFinished || room.Status == models.RoomStatusCancelled {
 
+	}
 	// 检查参与者是否已存在
 	var existingParticipant models.Participant
 	if err := ps.db.Where("room_id = ? AND uid = ?", req.RoomID, req.UID).First(&existingParticipant).Error; err == nil {
@@ -68,10 +70,14 @@ func (ps *ParticipantService) JoinRoom(req *models.JoinRoomRequest) (*models.Joi
 	}
 
 	return &models.JoinRoomResponse{
-		RoomID: req.RoomID,
-		UID:    req.UID,
-		Token:  token,
-		Status: models.ParticipantStatusJoined,
+		RoomID:          req.RoomID,
+		Creator:         room.Creator,
+		Token:           token,
+		URL:             "http://localhost:7880", // 应该从配置读取
+		Status:          room.Status,
+		CreatedAt:       ps.timeFormatter.FormatDateTime(room.CreatedAt),
+		MaxParticipants: room.MaxParticipants,
+		Timeout:         3600, // 默认超时时间（秒）
 	}, nil
 }
 

@@ -209,7 +209,7 @@ func (ph *ParticipantHandler) CheckUserCallStatus(c *gin.Context) {
 	}
 
 	// 如果没有正在通话的用户，返回空数组而不是 nil
-	if uids == nil {
+	if len(uids) == 0 {
 		uids = []string{}
 	}
 

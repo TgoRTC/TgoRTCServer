@@ -149,6 +149,7 @@ func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.Create
 
 	return &models.CreateRoomResponse{
 		RoomID:          roomID,
+		Creator:         req.Creator,
 		Token:           token,
 		URL:             "http://localhost:7880", // 应该从配置读取
 		Status:          room.Status,

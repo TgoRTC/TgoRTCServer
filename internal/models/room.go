@@ -59,6 +59,7 @@ type CreateRoomRequest struct {
 // CreateRoomResponse 创建房间响应
 type CreateRoomResponse struct {
 	RoomID          string `json:"room_id"`
+	Creator         string `json:"creator"`
 	Token           string `json:"token"`
 	URL             string `json:"url"`
 	Status          int16  `json:"status"`
