@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"tgo-call-server/internal/errors"
+	"tgo-call-server/internal/i18n"
 	"tgo-call-server/internal/middleware"
 	"tgo-call-server/internal/models"
 	"tgo-call-server/internal/service"
@@ -41,7 +42,7 @@ func (ph *ParticipantHandler) JoinRoom(c *gin.Context) {
 		)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code": 400,
-			"msg":  "参数错误",
+			"msg":  i18n.Translate(lang, i18n.InvalidParameters),
 		})
 		return
 	}
@@ -84,6 +85,7 @@ func (ph *ParticipantHandler) JoinRoom(c *gin.Context) {
 // LeaveRoom 参与者离开房间
 // POST /api/v1/rooms/:room_id/leave
 func (ph *ParticipantHandler) LeaveRoom(c *gin.Context) {
+	lang := middleware.GetLanguageFromContext(c)
 	logger := utils.GetLogger()
 	roomID := c.Param("room_id")
 
@@ -92,10 +94,11 @@ func (ph *ParticipantHandler) LeaveRoom(c *gin.Context) {
 		logger.Error("离开房间参数绑定失败",
 			zap.Error(err),
 			zap.String("room_id", roomID),
+			zap.String("language", lang),
 		)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code": 400,
-			"msg":  "参数错误",
+			"msg":  i18n.Translate(lang, i18n.InvalidParameters),
 		})
 		return
 	}
@@ -135,7 +138,7 @@ func (ph *ParticipantHandler) InviteParticipants(c *gin.Context) {
 		)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code": 400,
-			"msg":  "参数错误",
+			"msg":  i18n.Translate(lang, i18n.InvalidParameters),
 		})
 		return
 	}
@@ -176,16 +179,18 @@ func (ph *ParticipantHandler) InviteParticipants(c *gin.Context) {
 // CheckUserCallStatus 查询正在通话的成员
 // POST /api/v1/participants/calling
 func (ph *ParticipantHandler) CheckUserCallStatus(c *gin.Context) {
+	lang := middleware.GetLanguageFromContext(c)
 	logger := utils.GetLogger()
 
 	var req models.CheckUserCallStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logger.Error("查询正在通话成员参数绑定失败",
 			zap.Error(err),
+			zap.String("language", lang),
 		)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code": 400,
-			"msg":  "参数错误",
+			"msg":  i18n.Translate(lang, i18n.InvalidParameters),
 		})
 		return
 	}

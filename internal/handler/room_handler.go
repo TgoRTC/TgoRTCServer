@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"tgo-call-server/internal/errors"
+	"tgo-call-server/internal/i18n"
 	"tgo-call-server/internal/middleware"
 	"tgo-call-server/internal/models"
 	"tgo-call-server/internal/service"
@@ -39,7 +40,7 @@ func (rh *RoomHandler) CreateRoom(c *gin.Context) {
 		)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code": 400,
-			"msg":  "参数错误",
+			"msg":  i18n.Translate(lang, i18n.InvalidParameters),
 		})
 		return
 	}

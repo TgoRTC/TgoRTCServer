@@ -6,6 +6,9 @@ import "fmt"
 type MessageKey string
 
 const (
+	// 通用错误
+	InvalidParameters MessageKey = "invalid_parameters"
+
 	// 房间相关错误
 	RoomAlreadyExists           MessageKey = "room_already_exists"
 	ChannelHasActiveRoom        MessageKey = "channel_has_active_room"
@@ -29,6 +32,7 @@ const (
 // Translations 多语言翻译映射
 var Translations = map[string]map[MessageKey]string{
 	"zh-CN": {
+		InvalidParameters:             "参数错误",
 		RoomAlreadyExists:             "房间已存在: %s",
 		ChannelHasActiveRoom:          "该渠道已存在正在通话的房间",
 		CreatorInAnotherCall:          "创建者正在进行其他通话，无法创建房间",
@@ -46,6 +50,7 @@ var Translations = map[string]map[MessageKey]string{
 		ParticipantListQueryFailed:    "查询参与者列表失败: %v",
 	},
 	"zh-TW": {
+		InvalidParameters:             "參數錯誤",
 		RoomAlreadyExists:             "房間已存在: %s",
 		ChannelHasActiveRoom:          "該渠道已存在正在通話的房間",
 		CreatorInAnotherCall:          "建立者正在進行其他通話，無法建立房間",
@@ -63,6 +68,7 @@ var Translations = map[string]map[MessageKey]string{
 		ParticipantListQueryFailed:    "查詢參與者列表失敗: %v",
 	},
 	"en-US": {
+		InvalidParameters:             "Invalid parameters",
 		RoomAlreadyExists:             "Room already exists: %s",
 		ChannelHasActiveRoom:          "An active room already exists for this channel",
 		CreatorInAnotherCall:          "Creator is in another call, cannot create room",
@@ -80,6 +86,7 @@ var Translations = map[string]map[MessageKey]string{
 		ParticipantListQueryFailed:    "Failed to query participant list: %v",
 	},
 	"fr-FR": {
+		InvalidParameters:             "Paramètres invalides",
 		RoomAlreadyExists:             "La salle existe déjà: %s",
 		ChannelHasActiveRoom:          "Une salle active existe déjà pour ce canal",
 		CreatorInAnotherCall:          "Le créateur est en appel, impossible de créer la salle",
@@ -97,6 +104,7 @@ var Translations = map[string]map[MessageKey]string{
 		ParticipantListQueryFailed:    "Échec de la requête de la liste des participants: %v",
 	},
 	"ja-JP": {
+		InvalidParameters:             "無効なパラメータ",
 		RoomAlreadyExists:             "ルームは既に存在します: %s",
 		ChannelHasActiveRoom:          "このチャネルには既にアクティブなルームが存在します",
 		CreatorInAnotherCall:          "作成者は別の通話中です。ルームを作成できません",
