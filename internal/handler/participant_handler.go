@@ -228,14 +228,14 @@ func (ph *ParticipantHandler) UpdateParticipantStatus(c *gin.Context) {
 	c.JSON(http.StatusNoContent, nil)
 }
 
-// CheckUserCallStatus 检查用户是否正在通话
-// POST /api/participants/check-call-status
+// CheckUserCallStatus 查询正在通话的成员
+// POST /api/v1/participants/calling
 func (ph *ParticipantHandler) CheckUserCallStatus(c *gin.Context) {
 	logger := utils.GetLogger()
 
 	var req models.CheckUserCallStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		logger.Error("检查用户通话状态参数绑定失败",
+		logger.Error("查询正在通话成员参数绑定失败",
 			zap.Error(err),
 		)
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -247,7 +247,7 @@ func (ph *ParticipantHandler) CheckUserCallStatus(c *gin.Context) {
 
 	uids, err := ph.participantService.CheckUserCallStatus(req.UIDs)
 	if err != nil {
-		logger.Error("检查用户通话状态系统错误",
+		logger.Error("查询正在通话成员系统错误",
 			zap.Error(err),
 			zap.Strings("uids", req.UIDs),
 		)

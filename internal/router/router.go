@@ -65,7 +65,7 @@ func SetupRouter(db *gorm.DB, redisClient *redis.Client, cfg *config.Config) *gi
 		// 参与者相关接口
 		participants := api.Group("/participants")
 		{
-			participants.POST("/check-call-status", participantHandler.CheckUserCallStatus) // 检查用户通话状态
+			participants.POST("/calling", participantHandler.CheckUserCallStatus) // 查询正在通话的成员
 		}
 
 		// 迁移管理接口
