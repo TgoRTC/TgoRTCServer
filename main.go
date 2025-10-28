@@ -6,6 +6,7 @@ import (
 	"tgo-call-server/internal/config"
 	"tgo-call-server/internal/database"
 	"tgo-call-server/internal/router"
+	"tgo-call-server/internal/utils"
 
 	"github.com/joho/godotenv"
 )
@@ -15,6 +16,12 @@ func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("未找到 .env 文件，使用系统环境变量")
 	}
+
+	// 初始化日志记录器
+	if err := utils.InitLogger(); err != nil {
+		log.Fatalf("日志初始化失败: %v", err)
+	}
+	defer utils.CloseLogger()
 
 	// 初始化配置
 	cfg := config.LoadConfig()
