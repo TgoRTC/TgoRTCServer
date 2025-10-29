@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"tgo-call-server/internal/errors"
+	"tgo-call-server/internal/i18n"
 	"tgo-call-server/internal/livekit"
 	"tgo-call-server/internal/models"
 	"tgo-call-server/internal/utils"
@@ -34,12 +35,12 @@ func (ps *ParticipantService) JoinRoom(req *models.JoinRoomRequest) (*models.Joi
 	var room models.Room
 	if err := ps.db.Where("room_id = ?", req.RoomID).First(&room).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.NewBusinessErrorf("房间不存在: %s", req.RoomID)
+			return nil, errors.NewBusinessErrorWithKey(i18n.RoomNotFound, req.RoomID)
 		}
 		return nil, fmt.Errorf("查询房间失败: %w", err)
 	}
 	if room.Status == models.RoomStatusFinished || room.Status == models.RoomStatusCancelled {
-
+		return nil, errors.NewBusinessErrorWithKey(i18n.RoomNotActive)
 	}
 	// 检查参与者是否已存在
 	var existingParticipant models.Participant
@@ -87,7 +88,7 @@ func (ps *ParticipantService) LeaveRoom(req *models.LeaveRoomRequest) error {
 	var room models.Room
 	if err := ps.db.Where("room_id = ?", req.RoomID).First(&room).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return errors.NewBusinessErrorf("房间不存在: %s", req.RoomID)
+			return errors.NewBusinessErrorWithKey(i18n.RoomNotFound, req.RoomID)
 		}
 		return fmt.Errorf("查询房间失败: %w", err)
 	}
@@ -109,7 +110,7 @@ func (ps *ParticipantService) InviteParticipants(req *models.InviteParticipantRe
 	var room models.Room
 	if err := ps.db.Where("room_id = ?", req.RoomID).First(&room).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return errors.NewBusinessErrorf("房间不存在: %s", req.RoomID)
+			return errors.NewBusinessErrorWithKey(i18n.RoomNotFound, req.RoomID)
 		}
 		return fmt.Errorf("查询房间失败: %w", err)
 	}
