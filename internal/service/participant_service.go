@@ -45,7 +45,7 @@ func (ps *ParticipantService) JoinRoom(req *models.JoinRoomRequest) (*models.Joi
 	var existingParticipant models.Participant
 	if err := ps.db.Where("room_id = ? AND uid = ?", req.RoomID, req.UID).First(&existingParticipant).Error; err == nil {
 		// 参与者已存在，更新状态为已加入
-		if err := ps.db.Model(&existingParticipant).Update("status", models.ParticipantStatusJoined).Update("join_time", time.Now().UnixMilli()).Error; err != nil {
+		if err := ps.db.Model(&existingParticipant).Update("status", models.ParticipantStatusJoined).Update("join_time", time.Now().Unix()).Error; err != nil {
 			return nil, fmt.Errorf("更新参与者状态失败: %w", err)
 		}
 	} else if err == gorm.ErrRecordNotFound {
@@ -54,7 +54,7 @@ func (ps *ParticipantService) JoinRoom(req *models.JoinRoomRequest) (*models.Joi
 			RoomID:   req.RoomID,
 			UID:      req.UID,
 			Status:   models.ParticipantStatusJoined,
-			JoinTime: time.Now().UnixMilli(),
+			JoinTime: time.Now().Unix(),
 		}
 		if err := ps.db.Create(&participant).Error; err != nil {
 			return nil, fmt.Errorf("创建参与者记录失败: %w", err)
@@ -96,7 +96,7 @@ func (ps *ParticipantService) LeaveRoom(req *models.LeaveRoomRequest) error {
 		Where("room_id = ? AND uid = ?", req.RoomID, req.UID).
 		Updates(map[string]interface{}{
 			"status":     models.ParticipantStatusHangup,
-			"leave_time": time.Now().UnixMilli(),
+			"leave_time": time.Now().Unix(),
 		}).Error; err != nil {
 		return fmt.Errorf("更新参与者状态失败: %w", err)
 	}
