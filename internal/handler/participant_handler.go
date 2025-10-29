@@ -38,6 +38,7 @@ func (ph *ParticipantHandler) JoinRoom(c *gin.Context) {
 		logger.Error("加入房间参数绑定失败",
 			zap.Error(err),
 			zap.String("room_id", roomID),
+			zap.String("uid", req.UID),
 			zap.String("language", lang),
 		)
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -209,7 +210,7 @@ func (ph *ParticipantHandler) CheckUserCallStatus(c *gin.Context) {
 		return
 	}
 
-	uids, err := ph.participantService.CheckUserCallStatus(req.UIDs)
+	data, err := ph.participantService.CheckUserCallStatus(req.UIDs)
 	if err != nil {
 		logger.Error("查询正在通话成员系统错误",
 			zap.Error(err),
@@ -223,11 +224,11 @@ func (ph *ParticipantHandler) CheckUserCallStatus(c *gin.Context) {
 	}
 
 	// 如果没有正在通话的用户，返回空数组而不是 nil
-	if len(uids) == 0 {
-		uids = []string{}
+	if len(data) == 0 {
+		data = []models.UserCallStatus{}
 	}
 
 	c.JSON(http.StatusOK, models.CheckUserCallStatusResponse{
-		UIDs: uids,
+		Data: data,
 	})
 }

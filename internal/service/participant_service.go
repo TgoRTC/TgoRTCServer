@@ -132,9 +132,10 @@ func (ps *ParticipantService) InviteParticipants(req *models.InviteParticipantRe
 
 // CheckUserCallStatus 检查用户是否正在通话
 // 只查询 status=0(邀请中) 或 status=1(已加入) 的数据
-func (ps *ParticipantService) CheckUserCallStatus(uids []string) ([]string, error) {
+// 返回包含 roomID、uid、status 的用户通话状态列表
+func (ps *ParticipantService) CheckUserCallStatus(uids []string) ([]models.UserCallStatus, error) {
 	if len(uids) == 0 {
-		return []string{}, nil
+		return []models.UserCallStatus{}, nil
 	}
 
 	var participants []models.Participant
@@ -144,15 +145,14 @@ func (ps *ParticipantService) CheckUserCallStatus(uids []string) ([]string, erro
 		return nil, fmt.Errorf("查询用户通话状态失败: %w", err)
 	}
 
-	// 提取 UID 列表，去重
-	uidMap := make(map[string]bool)
+	// 构建返回结果
+	result := make([]models.UserCallStatus, 0, len(participants))
 	for _, p := range participants {
-		uidMap[p.UID] = true
-	}
-
-	result := make([]string, 0, len(uidMap))
-	for uid := range uidMap {
-		result = append(result, uid)
+		result = append(result, models.UserCallStatus{
+			RoomID: p.RoomID,
+			UID:    p.UID,
+			Status: p.Status,
+		})
 	}
 
 	return result, nil

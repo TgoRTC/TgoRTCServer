@@ -86,7 +86,14 @@ type CheckUserCallStatusRequest struct {
 	UIDs []string `json:"uids" binding:"required"`
 }
 
+// UserCallStatus 用户通话状态信息
+type UserCallStatus struct {
+	RoomID string `json:"room_id"`
+	UID    string `json:"uid"`
+	Status int16  `json:"status"`
+}
+
 // CheckUserCallStatusResponse 检查用户通话状态响应
 type CheckUserCallStatusResponse struct {
-	UIDs []string `json:"uids"`
+	Data []UserCallStatus `json:"data"`
 }
