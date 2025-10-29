@@ -107,15 +107,29 @@ func (ph *ParticipantHandler) LeaveRoom(c *gin.Context) {
 	req.RoomID = roomID
 
 	if err := ph.participantService.LeaveRoom(&req); err != nil {
-		logger.Error("离开房间系统错误",
-			zap.Error(err),
-			zap.String("room_id", req.RoomID),
-			zap.String("uid", req.UID),
-		)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code": 500,
-			"msg":  err.Error(),
-		})
+		if businessErr, ok := err.(*errors.BusinessError); ok {
+			logger.Warn("离开房间业务错误",
+				zap.String("error_key", string(businessErr.Key)),
+				zap.String("error_message", businessErr.GetLocalizedMessage(lang)),
+				zap.String("room_id", req.RoomID),
+				zap.String("uid", req.UID),
+				zap.String("language", lang),
+			)
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code": 400,
+				"msg":  businessErr.GetLocalizedMessage(lang),
+			})
+		} else {
+			logger.Error("离开房间系统错误",
+				zap.Error(err),
+				zap.String("room_id", req.RoomID),
+				zap.String("uid", req.UID),
+			)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code": 500,
+				"msg":  err.Error(),
+			})
+		}
 		return
 	}
 

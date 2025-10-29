@@ -83,6 +83,15 @@ func (ps *ParticipantService) JoinRoom(req *models.JoinRoomRequest) (*models.Joi
 
 // LeaveRoom 参与者离开房间
 func (ps *ParticipantService) LeaveRoom(req *models.LeaveRoomRequest) error {
+	// 检查房间是否存在
+	var room models.Room
+	if err := ps.db.Where("room_id = ?", req.RoomID).First(&room).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return errors.NewBusinessErrorf("房间不存在: %s", req.RoomID)
+		}
+		return fmt.Errorf("查询房间失败: %w", err)
+	}
+
 	if err := ps.db.Model(&models.Participant{}).
 		Where("room_id = ? AND uid = ?", req.RoomID, req.UID).
 		Updates(map[string]interface{}{
