@@ -42,6 +42,18 @@ func (ps *ParticipantService) JoinRoom(req *models.JoinRoomRequest) (*models.Joi
 	if room.Status == models.RoomStatusFinished || room.Status == models.RoomStatusCancelled {
 		return nil, errors.NewBusinessErrorWithKey(i18n.RoomNotActive)
 	}
+
+	// 如果房间开启了邀请，检查该用户是否被邀请
+	if room.InviteOn == models.InviteEnabled {
+		var invitedParticipant models.Participant
+		if err := ps.db.Where("room_id = ? AND uid = ? AND status = ?", req.RoomID, req.UID, models.ParticipantStatusInviting).First(&invitedParticipant).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return nil, errors.NewBusinessErrorWithKey(i18n.ParticipantNotInvited)
+			}
+			return nil, fmt.Errorf("查询邀请状态失败: %w", err)
+		}
+	}
+
 	// 检查参与者是否已存在
 	var existingParticipant models.Participant
 	if err := ps.db.Where("room_id = ? AND uid = ?", req.RoomID, req.UID).First(&existingParticipant).Error; err == nil {

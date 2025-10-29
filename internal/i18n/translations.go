@@ -28,6 +28,7 @@ const (
 	ParticipantLeaveFailed        MessageKey = "participant_leave_failed"
 	ParticipantStatusUpdateFailed MessageKey = "participant_status_update_failed"
 	ParticipantListQueryFailed    MessageKey = "participant_list_query_failed"
+	ParticipantNotInvited         MessageKey = "participant_not_invited"
 )
 
 // Translations 多语言翻译映射
@@ -50,6 +51,7 @@ var Translations = map[string]map[MessageKey]string{
 		ParticipantLeaveFailed:        "参与者离开房间失败: %v",
 		ParticipantStatusUpdateFailed: "更新参与者状态失败: %v",
 		ParticipantListQueryFailed:    "查询参与者列表失败: %v",
+		ParticipantNotInvited:         "您未被邀请加入此房间",
 	},
 	"zh-TW": {
 		InvalidParameters:             "參數錯誤",
@@ -69,6 +71,7 @@ var Translations = map[string]map[MessageKey]string{
 		ParticipantLeaveFailed:        "參與者離開房間失敗: %v",
 		ParticipantStatusUpdateFailed: "更新參與者狀態失敗: %v",
 		ParticipantListQueryFailed:    "查詢參與者列表失敗: %v",
+		ParticipantNotInvited:         "您未被邀請加入此房間",
 	},
 	"en-US": {
 		InvalidParameters:             "Invalid parameters",
@@ -88,6 +91,7 @@ var Translations = map[string]map[MessageKey]string{
 		ParticipantLeaveFailed:        "Failed to leave room: %v",
 		ParticipantStatusUpdateFailed: "Failed to update participant status: %v",
 		ParticipantListQueryFailed:    "Failed to query participant list: %v",
+		ParticipantNotInvited:         "You are not invited to join this room",
 	},
 	"fr-FR": {
 		InvalidParameters:             "Paramètres invalides",
@@ -107,6 +111,7 @@ var Translations = map[string]map[MessageKey]string{
 		ParticipantLeaveFailed:        "Échec de la sortie de la salle: %v",
 		ParticipantStatusUpdateFailed: "Échec de la mise à jour du statut du participant: %v",
 		ParticipantListQueryFailed:    "Échec de la requête de la liste des participants: %v",
+		ParticipantNotInvited:         "Vous n'êtes pas invité à rejoindre cette salle",
 	},
 	"ja-JP": {
 		InvalidParameters:             "無効なパラメータ",
@@ -126,6 +131,7 @@ var Translations = map[string]map[MessageKey]string{
 		ParticipantLeaveFailed:        "ルームからの退出に失敗しました: %v",
 		ParticipantStatusUpdateFailed: "参加者ステータスの更新に失敗しました: %v",
 		ParticipantListQueryFailed:    "参加者リストのクエリに失敗しました: %v",
+		ParticipantNotInvited:         "このルームへの招待を受けていません",
 	},
 }
 
