@@ -31,6 +31,9 @@ type Config struct {
 	LiveKitAPISecret string
 	LiveKitTimeout   int // 单位：秒
 
+	// 参与者超时配置
+	ParticipantTimeoutCheckInterval int // 检查间隔，单位：秒，默认 10 秒
+
 	// Webhook 配置
 	WebhookEnabled bool
 	WebhookSecret  string
@@ -54,6 +57,13 @@ func LoadConfig() *Config {
 	if timeout := os.Getenv("LIVEKIT_TIMEOUT"); timeout != "" {
 		if t, err := strconv.Atoi(timeout); err == nil {
 			liveKitTimeout = t
+		}
+	}
+
+	participantTimeoutCheckInterval := 10 // 默认 10 秒
+	if interval := os.Getenv("PARTICIPANT_TIMEOUT_CHECK_INTERVAL"); interval != "" {
+		if i, err := strconv.Atoi(interval); err == nil {
+			participantTimeoutCheckInterval = i
 		}
 	}
 
@@ -81,6 +91,9 @@ func LoadConfig() *Config {
 		LiveKitAPIKey:    getEnv("LIVEKIT_API_KEY", ""),
 		LiveKitAPISecret: getEnv("LIVEKIT_API_SECRET", ""),
 		LiveKitTimeout:   liveKitTimeout,
+
+		// 参与者超时配置
+		ParticipantTimeoutCheckInterval: participantTimeoutCheckInterval,
 
 		// Webhook 配置
 		WebhookEnabled: webhookEnabled,

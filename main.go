@@ -6,6 +6,7 @@ import (
 	"tgo-call-server/internal/config"
 	"tgo-call-server/internal/database"
 	"tgo-call-server/internal/router"
+	"tgo-call-server/internal/service"
 	"tgo-call-server/internal/utils"
 
 	"github.com/joho/godotenv"
@@ -40,6 +41,11 @@ func main() {
 
 	// 创建路由
 	r := router.SetupRouter(db, redisClient, cfg)
+
+	// 启动参与者超时检查定时器
+	scheduler := service.NewSchedulerService(db, cfg)
+	scheduler.Start()
+	defer scheduler.Stop()
 
 	// 启动服务器
 	port := cfg.Port
