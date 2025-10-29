@@ -30,6 +30,11 @@ func SetupRouter(db *gorm.DB, redisClient *redis.Client, cfg *config.Config) *gi
 	roomHandler := handler.NewRoomHandler(roomService)
 	participantHandler := handler.NewParticipantHandler(participantService)
 
+	// 初始化 webhook 服务和处理器
+	webhookService := service.NewWebhookService(db)
+	webhookValidator := livekit.NewWebhookValidator(cfg.LiveKitAPIKey, cfg.LiveKitAPISecret)
+	webhookHandler := handler.NewWebhookHandler(webhookService, webhookValidator)
+
 	// 健康检查
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
@@ -53,6 +58,12 @@ func SetupRouter(db *gorm.DB, redisClient *redis.Client, cfg *config.Config) *gi
 		participants := api.Group("/participants")
 		{
 			participants.POST("/calling", participantHandler.CheckUserCallStatus) // 查询正在通话的成员
+		}
+
+		// Webhook 相关接口
+		webhooks := api.Group("/webhooks")
+		{
+			webhooks.POST("/livekit", webhookHandler.HandleWebhook) // LiveKit webhook
 		}
 	}
 
