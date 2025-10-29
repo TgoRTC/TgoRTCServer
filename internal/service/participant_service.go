@@ -1,7 +1,6 @@
 package service
 
 import (
-	"fmt"
 	"time"
 
 	"tgo-call-server/internal/errors"
@@ -37,7 +36,7 @@ func (ps *ParticipantService) JoinRoom(req *models.JoinRoomRequest) (*models.Joi
 		if err == gorm.ErrRecordNotFound {
 			return nil, errors.NewBusinessErrorWithKey(i18n.RoomNotFound, req.RoomID)
 		}
-		return nil, fmt.Errorf("查询房间失败: %w", err)
+		return nil, errors.NewBusinessErrorWithKey(i18n.RoomQueryFailed, err.Error())
 	}
 	if room.Status == models.RoomStatusFinished || room.Status == models.RoomStatusCancelled {
 		return nil, errors.NewBusinessErrorWithKey(i18n.RoomNotActive)
@@ -50,7 +49,7 @@ func (ps *ParticipantService) JoinRoom(req *models.JoinRoomRequest) (*models.Joi
 			if err == gorm.ErrRecordNotFound {
 				return nil, errors.NewBusinessErrorWithKey(i18n.ParticipantNotInvited)
 			}
-			return nil, fmt.Errorf("查询邀请状态失败: %w", err)
+			return nil, errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
 		}
 	}
 
@@ -59,7 +58,7 @@ func (ps *ParticipantService) JoinRoom(req *models.JoinRoomRequest) (*models.Joi
 	if err := ps.db.Where("room_id = ? AND uid = ?", req.RoomID, req.UID).First(&existingParticipant).Error; err == nil {
 		// 参与者已存在，更新状态为已加入
 		if err := ps.db.Model(&existingParticipant).Update("status", models.ParticipantStatusJoined).Update("join_time", time.Now().Unix()).Error; err != nil {
-			return nil, fmt.Errorf("更新参与者状态失败: %w", err)
+			return nil, errors.NewBusinessErrorWithKey(i18n.ParticipantStatusUpdateFailed, err.Error())
 		}
 	} else if err == gorm.ErrRecordNotFound {
 		// 创建新的参与者记录
@@ -70,16 +69,16 @@ func (ps *ParticipantService) JoinRoom(req *models.JoinRoomRequest) (*models.Joi
 			JoinTime: time.Now().Unix(),
 		}
 		if err := ps.db.Create(&participant).Error; err != nil {
-			return nil, fmt.Errorf("创建参与者记录失败: %w", err)
+			return nil, errors.NewBusinessErrorWithKey(i18n.ParticipantAddFailed, err.Error())
 		}
 	} else {
-		return nil, fmt.Errorf("查询参与者失败: %w", err)
+		return nil, errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
 	}
 
 	// 生成 Token 和获取配置信息
 	tokenResult, err := ps.tokenGenerator.GenerateTokenWithConfig(req.RoomID, req.UID)
 	if err != nil {
-		return nil, fmt.Errorf("生成 Token 失败: %w", err)
+		return nil, errors.NewBusinessErrorWithKey(i18n.TokenGenerationFailed, err.Error())
 	}
 
 	return &models.JoinRoomResponse{
@@ -102,7 +101,7 @@ func (ps *ParticipantService) LeaveRoom(req *models.LeaveRoomRequest) error {
 		if err == gorm.ErrRecordNotFound {
 			return errors.NewBusinessErrorWithKey(i18n.RoomNotFound, req.RoomID)
 		}
-		return fmt.Errorf("查询房间失败: %w", err)
+		return errors.NewBusinessErrorWithKey(i18n.RoomQueryFailed, err.Error())
 	}
 
 	if err := ps.db.Model(&models.Participant{}).
@@ -111,7 +110,7 @@ func (ps *ParticipantService) LeaveRoom(req *models.LeaveRoomRequest) error {
 			"status":     models.ParticipantStatusHangup,
 			"leave_time": time.Now().Unix(),
 		}).Error; err != nil {
-		return fmt.Errorf("更新参与者状态失败: %w", err)
+		return errors.NewBusinessErrorWithKey(i18n.ParticipantStatusUpdateFailed, err.Error())
 	}
 	return nil
 }
@@ -124,12 +123,13 @@ func (ps *ParticipantService) InviteParticipants(req *models.InviteParticipantRe
 		if err == gorm.ErrRecordNotFound {
 			return errors.NewBusinessErrorWithKey(i18n.RoomNotFound, req.RoomID)
 		}
-		return fmt.Errorf("查询房间失败: %w", err)
+		return errors.NewBusinessErrorWithKey(i18n.RoomQueryFailed, err.Error())
 	}
 
 	// 在事务中为每个 UID 创建参与者记录
 	// 确保要么所有用户都被邀请成功，要么都失败
-	return ps.db.Transaction(func(tx *gorm.DB) error {
+	// 如果任何操作失败，事务会自动回滚
+	err := ps.db.Transaction(func(tx *gorm.DB) error {
 		for _, uid := range req.UIDs {
 			participant := models.Participant{
 				RoomID: req.RoomID,
@@ -137,11 +137,14 @@ func (ps *ParticipantService) InviteParticipants(req *models.InviteParticipantRe
 				Status: models.ParticipantStatusInviting,
 			}
 			if err := tx.Create(&participant).Error; err != nil {
-				return fmt.Errorf("创建参与者记录失败: %w", err)
+				// 返回多语言错误消息
+				return errors.NewBusinessErrorWithKey(i18n.InvitedParticipantAddFailed, err.Error())
 			}
 		}
 		return nil
 	})
+
+	return err
 }
 
 // CheckUserCallStatus 检查用户是否正在通话
@@ -156,7 +159,7 @@ func (ps *ParticipantService) CheckUserCallStatus(uids []string) ([]models.UserC
 	// 查询 status=0(邀请中) 或 status=1(已加入) 的参与者
 	if err := ps.db.Where("uid IN ? AND (status = ? OR status = ?)", uids, models.ParticipantStatusInviting, models.ParticipantStatusJoined).
 		Find(&participants).Error; err != nil {
-		return nil, fmt.Errorf("查询用户通话状态失败: %w", err)
+		return nil, errors.NewBusinessErrorWithKey(i18n.ParticipantListQueryFailed, err.Error())
 	}
 
 	// 构建返回结果

@@ -29,6 +29,11 @@ const (
 	ParticipantStatusUpdateFailed MessageKey = "participant_status_update_failed"
 	ParticipantListQueryFailed    MessageKey = "participant_list_query_failed"
 	ParticipantNotInvited         MessageKey = "participant_not_invited"
+
+	// 数据库操作错误
+	RoomQueryFailed         MessageKey = "room_query_failed"
+	ParticipantAddFailed    MessageKey = "participant_add_failed"
+	TransactionCommitFailed MessageKey = "transaction_commit_failed"
 )
 
 // Translations 多语言翻译映射
@@ -52,6 +57,9 @@ var Translations = map[string]map[MessageKey]string{
 		ParticipantStatusUpdateFailed: "更新参与者状态失败: %v",
 		ParticipantListQueryFailed:    "查询参与者列表失败: %v",
 		ParticipantNotInvited:         "您未被邀请加入此房间",
+		RoomQueryFailed:               "查询房间失败: %v",
+		ParticipantAddFailed:          "添加参与者失败: %v",
+		TransactionCommitFailed:       "提交事务失败: %v",
 	},
 	"zh-TW": {
 		InvalidParameters:             "參數錯誤",
@@ -72,6 +80,9 @@ var Translations = map[string]map[MessageKey]string{
 		ParticipantStatusUpdateFailed: "更新參與者狀態失敗: %v",
 		ParticipantListQueryFailed:    "查詢參與者列表失敗: %v",
 		ParticipantNotInvited:         "您未被邀請加入此房間",
+		RoomQueryFailed:               "查詢房間失敗: %v",
+		ParticipantAddFailed:          "添加參與者失敗: %v",
+		TransactionCommitFailed:       "提交事務失敗: %v",
 	},
 	"en-US": {
 		InvalidParameters:             "Invalid parameters",
@@ -92,6 +103,9 @@ var Translations = map[string]map[MessageKey]string{
 		ParticipantStatusUpdateFailed: "Failed to update participant status: %v",
 		ParticipantListQueryFailed:    "Failed to query participant list: %v",
 		ParticipantNotInvited:         "You are not invited to join this room",
+		RoomQueryFailed:               "Failed to query room: %v",
+		ParticipantAddFailed:          "Failed to add participant: %v",
+		TransactionCommitFailed:       "Failed to commit transaction: %v",
 	},
 	"fr-FR": {
 		InvalidParameters:             "Paramètres invalides",
@@ -112,6 +126,9 @@ var Translations = map[string]map[MessageKey]string{
 		ParticipantStatusUpdateFailed: "Échec de la mise à jour du statut du participant: %v",
 		ParticipantListQueryFailed:    "Échec de la requête de la liste des participants: %v",
 		ParticipantNotInvited:         "Vous n'êtes pas invité à rejoindre cette salle",
+		RoomQueryFailed:               "Échec de la requête de la salle: %v",
+		ParticipantAddFailed:          "Échec de l'ajout du participant: %v",
+		TransactionCommitFailed:       "Échec de la validation de la transaction: %v",
 	},
 	"ja-JP": {
 		InvalidParameters:             "無効なパラメータ",
@@ -132,6 +149,9 @@ var Translations = map[string]map[MessageKey]string{
 		ParticipantStatusUpdateFailed: "参加者ステータスの更新に失敗しました: %v",
 		ParticipantListQueryFailed:    "参加者リストのクエリに失敗しました: %v",
 		ParticipantNotInvited:         "このルームへの招待を受けていません",
+		RoomQueryFailed:               "ルームのクエリに失敗しました: %v",
+		ParticipantAddFailed:          "参加者の追加に失敗しました: %v",
+		TransactionCommitFailed:       "トランザクションのコミットに失敗しました: %v",
 	},
 }
 
