@@ -127,19 +127,21 @@ func (ps *ParticipantService) InviteParticipants(req *models.InviteParticipantRe
 		return fmt.Errorf("查询房间失败: %w", err)
 	}
 
-	// 为每个 UID 创建参与者记录
-	for _, uid := range req.UIDs {
-		participant := models.Participant{
-			RoomID: req.RoomID,
-			UID:    uid,
-			Status: models.ParticipantStatusInviting,
+	// 在事务中为每个 UID 创建参与者记录
+	// 确保要么所有用户都被邀请成功，要么都失败
+	return ps.db.Transaction(func(tx *gorm.DB) error {
+		for _, uid := range req.UIDs {
+			participant := models.Participant{
+				RoomID: req.RoomID,
+				UID:    uid,
+				Status: models.ParticipantStatusInviting,
+			}
+			if err := tx.Create(&participant).Error; err != nil {
+				return fmt.Errorf("创建参与者记录失败: %w", err)
+			}
 		}
-		if err := ps.db.Create(&participant).Error; err != nil {
-			return fmt.Errorf("创建参与者记录失败: %w", err)
-		}
-	}
-
-	return nil
+		return nil
+	})
 }
 
 // CheckUserCallStatus 检查用户是否正在通话
