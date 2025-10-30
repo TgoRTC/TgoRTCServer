@@ -1,0 +1,595 @@
+openapi: 3.0.0
+info:
+  title: TgoCall Server API
+  description: 基于 LiveKit 的音视频服务 API
+  version: 1.0.0
+  contact:
+    name: API Support
+    url: https://github.com/TgoRTC/TgoCallServer
+
+servers:
+  - url: http://localhost:8080
+    description: 本地开发环境
+  - url: https://api.example.com
+    description: 生产环境
+
+tags:
+  - name: 房间管理
+    description: 房间相关的 API 接口
+  - name: 参与者管理
+    description: 参与者相关的 API 接口
+  - name: Webhook
+    description: Webhook 相关的 API 接口
+
+paths:
+  /api/v1/rooms:
+    post:
+      tags:
+        - 房间管理
+      summary: 创建房间
+      description: 创建一个新的音视频房间
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRoomRequest'
+      responses:
+        '201':
+          description: 房间创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateRoomResponse'
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/rooms/{room_id}/invite:
+    post:
+      tags:
+        - 房间管理
+      summary: 邀请参与者
+      description: 邀请一个或多个用户加入房间
+      parameters:
+        - name: room_id
+          in: path
+          required: true
+          description: 房间 ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteParticipantRequest'
+      responses:
+        '200':
+          description: 邀请成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 房间不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/rooms/{room_id}/join:
+    post:
+      tags:
+        - 参与者管理
+      summary: 加入房间
+      description: 参与者加入指定的房间
+      parameters:
+        - name: room_id
+          in: path
+          required: true
+          description: 房间 ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoinRoomRequest'
+      responses:
+        '200':
+          description: 加入房间成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoinRoomResponse'
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 房间不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/rooms/{room_id}/leave:
+    post:
+      tags:
+        - 参与者管理
+      summary: 离开房间
+      description: 参与者离开指定的房间
+      parameters:
+        - name: room_id
+          in: path
+          required: true
+          description: 房间 ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LeaveRoomRequest'
+      responses:
+        '200':
+          description: 离开房间成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 房间或参与者不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/participants/calling:
+    post:
+      tags:
+        - 参与者管理
+      summary: 查询用户通话状态
+      description: 查询指定用户是否正在通话
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckUserCallStatusRequest'
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckUserCallStatusResponse'
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/webhooks/livekit:
+    post:
+      tags:
+        - Webhook
+      summary: LiveKit Webhook
+      description: 接收 LiveKit 事件通知
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookEvent'
+      responses:
+        '200':
+          description: 事件处理成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: 事件解析失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 验证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/webhooks/logs/stats:
+    get:
+      tags:
+        - Webhook
+      summary: 获取 Webhook 日志统计
+      description: 获取业务 webhook 日志的统计信息
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookLogStatsResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/webhooks/logs/cleanup:
+    post:
+      tags:
+        - Webhook
+      summary: 清理 Webhook 日志
+      description: 手动清理指定天数前的 webhook 日志
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CleanupLogsRequest'
+      responses:
+        '200':
+          description: 日志清理成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    CreateRoomRequest:
+      type: object
+      required:
+        - source_channel_id
+        - creator
+      properties:
+        source_channel_id:
+          type: string
+          description: 源渠道 ID
+          example: "channel_123"
+        source_channel_type:
+          type: integer
+          description: 源渠道类型
+          example: 0
+        creator:
+          type: string
+          description: 房间创建者 ID
+          example: "user_001"
+        room_id:
+          type: string
+          description: 房间 ID（可选，不传则自动生成）
+          example: "room_abc123"
+        call_type:
+          type: integer
+          description: "呼叫类型（0: 语音, 1: 视频）"
+          example: 1
+        invite_on:
+          type: integer
+          description: "是否开启邀请（0: 否, 1: 是）"
+          example: 1
+        max_participants:
+          type: integer
+          description: 最大参与者数（默认 2）
+          example: 2
+        uids:
+          type: array
+          items:
+            type: string
+          description: 邀请的用户 ID 列表
+          example: ["user_002", "user_003"]
+
+    CreateRoomResponse:
+      type: object
+      properties:
+        room_id:
+          type: string
+          description: 房间 ID
+          example: "room_abc123"
+        creator:
+          type: string
+          description: 房间创建者 ID
+          example: "user_001"
+        token:
+          type: string
+          description: LiveKit Token
+          example: "eyJhbGc..."
+        url:
+          type: string
+          description: LiveKit 服务器 URL
+          example: "http://localhost:7880"
+        status:
+          type: integer
+          description: "房间状态（0: 未开始, 1: 进行中, 2: 已结束, 3: 已取消）"
+          example: 0
+        created_at:
+          type: string
+          description: 创建时间
+          example: "2024-01-15 10:30:00"
+        max_participants:
+          type: integer
+          description: 最大参与者数
+          example: 2
+        timeout:
+          type: integer
+          description: 超时时间（秒）
+          example: 3600
+
+    JoinRoomRequest:
+      type: object
+      required:
+        - uid
+      properties:
+        uid:
+          type: string
+          description: 用户 ID
+          example: "user_002"
+
+    JoinRoomResponse:
+      type: object
+      properties:
+        room_id:
+          type: string
+          description: 房间 ID
+          example: "room_abc123"
+        creator:
+          type: string
+          description: 房间创建者 ID
+          example: "user_001"
+        token:
+          type: string
+          description: LiveKit Token
+          example: "eyJhbGc..."
+        url:
+          type: string
+          description: LiveKit 服务器 URL
+          example: "http://localhost:7880"
+        status:
+          type: integer
+          description: 房间状态
+          example: 1
+        created_at:
+          type: string
+          description: 创建时间
+          example: "2024-01-15 10:30:00"
+        max_participants:
+          type: integer
+          description: 最大参与者数
+          example: 2
+        timeout:
+          type: integer
+          description: 超时时间（秒）
+          example: 3600
+
+    LeaveRoomRequest:
+      type: object
+      required:
+        - uid
+      properties:
+        uid:
+          type: string
+          description: 用户 ID
+          example: "user_002"
+
+    InviteParticipantRequest:
+      type: object
+      required:
+        - uids
+      properties:
+        uids:
+          type: array
+          items:
+            type: string
+          description: 邀请的用户 ID 列表
+          example: ["user_002", "user_003"]
+
+    CheckUserCallStatusRequest:
+      type: object
+      required:
+        - uids
+      properties:
+        uids:
+          type: array
+          items:
+            type: string
+          description: 要查询的用户 ID 列表
+          example: ["user_001", "user_002"]
+
+    CheckUserCallStatusResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+        msg:
+          type: string
+          example: "ok"
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserCallStatus'
+
+    UserCallStatus:
+      type: object
+      properties:
+        room_id:
+          type: string
+          description: 房间 ID
+          example: "room_abc123"
+        uid:
+          type: string
+          description: 用户 ID
+          example: "user_001"
+        status:
+          type: integer
+          description: "参与者状态（0: 邀请中, 1: 已加入, 2: 已拒绝, 3: 已挂断, 4: 超时, 5: 未接听, 6: 已取消）"
+          example: 1
+
+    WebhookEvent:
+      type: object
+      properties:
+        event:
+          type: string
+          description: 事件类型
+          example: "room_started"
+        id:
+          type: string
+          description: 事件 ID
+          example: "evt_123"
+        createdAt:
+          type: integer
+          description: 事件创建时间戳
+          example: 1705315800
+        room:
+          $ref: '#/components/schemas/RoomInfo'
+        participant:
+          $ref: '#/components/schemas/ParticipantInfo'
+
+    RoomInfo:
+      type: object
+      properties:
+        sid:
+          type: string
+          description: 房间 SID
+          example: "RM_abc123"
+        name:
+          type: string
+          description: 房间名称
+          example: "room_abc123"
+        emptyTimeout:
+          type: integer
+          description: 空房间超时时间
+          example: 300
+        creationTime:
+          type: integer
+          description: 创建时间戳
+          example: 1705315800
+        metadata:
+          type: string
+          description: 房间元数据
+          example: "{}"
+
+    ParticipantInfo:
+      type: object
+      properties:
+        sid:
+          type: string
+          description: 参与者 SID
+          example: "PA_abc123"
+        identity:
+          type: string
+          description: 参与者身份标识
+          example: "user_001"
+        state:
+          type: string
+          description: 参与者状态
+          example: "ACTIVE"
+        joinedAt:
+          type: integer
+          description: 加入时间戳
+          example: 1705315800
+
+    WebhookLogStatsResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+        msg:
+          type: string
+          example: "ok"
+        data:
+          type: object
+          properties:
+            total_count:
+              type: integer
+              description: 总日志数
+              example: 1000
+            success_count:
+              type: integer
+              description: 成功数
+              example: 950
+            failed_count:
+              type: integer
+              description: 失败数
+              example: 50
+            pending_count:
+              type: integer
+              description: 待重试数
+              example: 10
+
+    CleanupLogsRequest:
+      type: object
+      required:
+        - retention_days
+      properties:
+        retention_days:
+          type: integer
+          description: 保留天数（最少 1 天）
+          example: 7
+
+    SuccessResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+        msg:
+          type: string
+          example: "ok"
+
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 400
+        msg:
+          type: string
+          example: "参数错误"
+

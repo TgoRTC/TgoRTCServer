@@ -10,7 +10,21 @@ import (
 	"tgo-call-server/internal/utils"
 
 	"github.com/joho/godotenv"
+
+	_ "tgo-call-server/docs"
 )
+
+// @title TgoCall Server API
+// @version 1.0.0
+// @description 基于 LiveKit 的音视频服务 API
+// @contact.name API Support
+// @contact.url https://github.com/TgoRTC/TgoCallServer
+// @host localhost:8080
+// @BasePath /api/v1
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token.
 
 func main() {
 	// 加载环境变量
