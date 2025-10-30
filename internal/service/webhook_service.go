@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"time"
 
 	"tgo-call-server/internal/models"
 	"tgo-call-server/internal/utils"
@@ -214,10 +215,77 @@ func (ws *WebhookService) handleParticipantJoined(event *models.WebhookEvent) er
 		zap.String("room_name", event.Room.Name),
 	)
 
-	// 可以在这里添加业务逻辑
-	// - 更新参与者状态
-	// - 发送通知
-	// - 记录日志
+	// 1、判断参与者是否在 call_participant 表存在
+	var participant models.Participant
+	if err := ws.db.Where("room_id = ? AND uid = ?", event.Room.Name, event.Participant.Identity).First(&participant).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			// 参与者不存在，插入一条新记录
+			participant = models.Participant{
+				RoomID:   event.Room.Name,
+				UID:      event.Participant.Identity,
+				Status:   models.ParticipantStatusJoined,
+				JoinTime: time.Now().Unix(),
+			}
+			if err := ws.db.Create(&participant).Error; err != nil {
+				logger.Error("创建参与者记录失败",
+					zap.String("room_id", event.Room.Name),
+					zap.String("uid", event.Participant.Identity),
+					zap.Error(err),
+				)
+				return err
+			}
+			logger.Info("参与者记录已创建",
+				zap.String("room_id", event.Room.Name),
+				zap.String("uid", event.Participant.Identity),
+			)
+		} else {
+			logger.Error("查询参与者记录失败",
+				zap.String("room_id", event.Room.Name),
+				zap.String("uid", event.Participant.Identity),
+				zap.Error(err),
+			)
+			return err
+		}
+	} else {
+		// 参与者已存在，更新状态为已加入
+		if err := ws.db.Model(&participant).Updates(map[string]interface{}{
+			"status":    models.ParticipantStatusJoined,
+			"join_time": time.Now().Unix(),
+		}).Error; err != nil {
+			logger.Error("更新参与者状态失败",
+				zap.String("room_id", event.Room.Name),
+				zap.String("uid", event.Participant.Identity),
+				zap.Error(err),
+			)
+			return err
+		}
+		logger.Info("参与者状态已更新为已加入",
+			zap.String("room_id", event.Room.Name),
+			zap.String("uid", event.Participant.Identity),
+		)
+	}
+
+	// 2、通知业务的 webhook
+	if ws.businessWebhookService != nil {
+		eventData := &models.ParticipantEventData{
+			RoomID:    participant.RoomID,
+			UID:       participant.UID,
+			Status:    int(participant.Status),
+			JoinTime:  participant.JoinTime,
+			LeaveTime: participant.LeaveTime,
+			CreatedAt: participant.CreatedAt.Unix(),
+			UpdatedAt: participant.UpdatedAt.Unix(),
+		}
+		if err := ws.businessWebhookService.SendEvent(models.BusinessEventParticipantJoined, eventData); err != nil {
+			logger.Error("发送业务 webhook 事件失败",
+				zap.String("room_id", participant.RoomID),
+				zap.String("uid", participant.UID),
+				zap.String("event_type", models.BusinessEventParticipantJoined),
+				zap.Error(err),
+			)
+			// 不返回错误，因为参与者状态已经更新成功
+		}
+	}
 
 	return nil
 }
