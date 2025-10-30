@@ -1,12 +1,15 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"tgo-call-server/internal/models"
 	"tgo-call-server/internal/utils"
 
+	"github.com/go-redis/redis/v8"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -14,13 +17,15 @@ import (
 // WebhookService webhook 服务
 type WebhookService struct {
 	db                     *gorm.DB
+	redisClient            *redis.Client
 	businessWebhookService *BusinessWebhookService
 }
 
 // NewWebhookService 创建 webhook 服务
-func NewWebhookService(db *gorm.DB) *WebhookService {
+func NewWebhookService(db *gorm.DB, redisClient *redis.Client) *WebhookService {
 	return &WebhookService{
-		db: db,
+		db:          db,
+		redisClient: redisClient,
 	}
 }
 
@@ -30,12 +35,52 @@ func (ws *WebhookService) SetBusinessWebhookService(bws *BusinessWebhookService)
 }
 
 // HandleWebhookEvent 处理 webhook 事件
+// 支持分布式环境中的事件去重（使用 Redis）
 func (ws *WebhookService) HandleWebhookEvent(event *models.WebhookEvent) error {
 	logger := utils.GetLogger()
 	logger.Info("收到 webhook 事件",
 		zap.String("event_type", event.Event),
 		zap.String("event_id", event.ID),
 	)
+
+	// 使用 Redis 进行事件去重（防止分布式环境中的重复处理）
+	if ws.redisClient != nil {
+		// 生成事件 ID（用于去重）
+		// 格式: webhook:{event_type}:{event_id}
+		deduplicationKey := fmt.Sprintf("webhook:%s:%s", event.Event, event.ID)
+
+		// 使用 Redis 检查是否已处理过
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		exists, err := ws.redisClient.Exists(ctx, deduplicationKey).Result()
+		if err != nil {
+			logger.Warn("Redis 查询失败，继续处理事件",
+				zap.String("event_id", event.ID),
+				zap.Error(err),
+			)
+		} else if exists > 0 {
+			// 事件已处理过，直接返回
+			logger.Info("事件已处理过，跳过",
+				zap.String("event_type", event.Event),
+				zap.String("event_id", event.ID),
+			)
+			return nil
+		}
+
+		// 处理事件后，标记为已处理（设置 1 小时过期）
+		defer func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			if err := ws.redisClient.Set(ctx, deduplicationKey, "1", time.Hour).Err(); err != nil {
+				logger.Warn("Redis 设置失败，事件已处理但未标记",
+					zap.String("event_id", event.ID),
+					zap.Error(err),
+				)
+			}
+		}()
+	}
 
 	switch event.Event {
 	case models.WebhookEventRoomStarted:
