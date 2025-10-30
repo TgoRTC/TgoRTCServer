@@ -2,10 +2,11 @@ package service
 
 import (
 	"encoding/json"
-	"log"
 
 	"tgo-call-server/internal/models"
+	"tgo-call-server/internal/utils"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -29,7 +30,11 @@ func (ws *WebhookService) SetBusinessWebhookService(bws *BusinessWebhookService)
 
 // HandleWebhookEvent 处理 webhook 事件
 func (ws *WebhookService) HandleWebhookEvent(event *models.WebhookEvent) error {
-	log.Printf("📨 收到 webhook 事件: %s (ID: %s)", event.Event, event.ID)
+	logger := utils.GetLogger()
+	logger.Info("收到 webhook 事件",
+		zap.String("event_type", event.Event),
+		zap.String("event_id", event.ID),
+	)
 
 	switch event.Event {
 	case models.WebhookEventRoomStarted:
@@ -47,37 +52,54 @@ func (ws *WebhookService) HandleWebhookEvent(event *models.WebhookEvent) error {
 	// case models.WebhookEventTrackUnpublished:
 	// 	return ws.handleTrackUnpublished(event)
 	default:
-		log.Printf("⚠️  未知的 webhook 事件类型: %s", event.Event)
+		logger.Warn("未知的 webhook 事件类型",
+			zap.String("event_type", event.Event),
+		)
 		return nil
 	}
 }
 
 // handleRoomStarted 处理房间开始事件
 func (ws *WebhookService) handleRoomStarted(event *models.WebhookEvent) error {
+	logger := utils.GetLogger()
+
 	if event.Room == nil {
 		return nil
 	}
 
-	log.Printf("✅ 房间已开始: %s (SID: %s)", event.Room.Name, event.Room.SID)
+	logger.Info("房间已开始",
+		zap.String("room_name", event.Room.Name),
+		zap.String("room_sid", event.Room.SID),
+	)
 
 	// 1、查询房间是否存在，如果存在则更新状态为进行中
 	var room models.Room
 	if err := ws.db.Where("room_id = ?", event.Room.Name).First(&room).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			log.Printf("⚠️  房间不存在: %s", event.Room.Name)
+			logger.Warn("房间不存在",
+				zap.String("room_id", event.Room.Name),
+			)
 			return nil
 		}
-		log.Printf("❌ 查询房间失败: %v", err)
+		logger.Error("查询房间失败",
+			zap.String("room_id", event.Room.Name),
+			zap.Error(err),
+		)
 		return err
 	}
 
 	// 更新房间状态为进行中
 	if err := ws.db.Model(&room).Update("status", models.RoomStatusInProgress).Error; err != nil {
-		log.Printf("❌ 更新房间状态失败: %v", err)
+		logger.Error("更新房间状态失败",
+			zap.String("room_id", event.Room.Name),
+			zap.Error(err),
+		)
 		return err
 	}
 
-	log.Printf("✅ 房间状态已更新为进行中: %s", event.Room.Name)
+	logger.Info("房间状态已更新为进行中",
+		zap.String("room_id", event.Room.Name),
+	)
 
 	// 2、通知业务的webhook
 	if ws.businessWebhookService != nil {
@@ -92,7 +114,11 @@ func (ws *WebhookService) handleRoomStarted(event *models.WebhookEvent) error {
 			UpdatedAt:       room.UpdatedAt.Unix(),
 		}
 		if err := ws.businessWebhookService.SendEvent(models.BusinessEventRoomStarted, eventData); err != nil {
-			log.Printf("❌ 发送业务 webhook 事件失败: %v", err)
+			logger.Error("发送业务 webhook 事件失败",
+				zap.String("room_id", room.RoomID),
+				zap.String("event_type", models.BusinessEventRoomStarted),
+				zap.Error(err),
+			)
 			// 不返回错误，因为房间状态已经更新成功
 		}
 	}
@@ -102,17 +128,25 @@ func (ws *WebhookService) handleRoomStarted(event *models.WebhookEvent) error {
 
 // handleRoomFinished 处理房间结束事件
 func (ws *WebhookService) handleRoomFinished(event *models.WebhookEvent) error {
+	logger := utils.GetLogger()
+
 	if event.Room == nil {
 		return nil
 	}
 
-	log.Printf("✅ 房间已结束: %s (SID: %s)", event.Room.Name, event.Room.SID)
+	logger.Info("房间已结束",
+		zap.String("room_name", event.Room.Name),
+		zap.String("room_sid", event.Room.SID),
+	)
 
 	// 更新房间状态为已结束
 	if err := ws.db.Model(&models.Room{}).
 		Where("room_id = ?", event.Room.Name).
 		Update("status", models.RoomStatusFinished).Error; err != nil {
-		log.Printf("❌ 更新房间状态失败: %v", err)
+		logger.Error("更新房间状态失败",
+			zap.String("room_id", event.Room.Name),
+			zap.Error(err),
+		)
 		return err
 	}
 
@@ -121,12 +155,17 @@ func (ws *WebhookService) handleRoomFinished(event *models.WebhookEvent) error {
 
 // handleParticipantJoined 处理参与者加入事件
 func (ws *WebhookService) handleParticipantJoined(event *models.WebhookEvent) error {
+	logger := utils.GetLogger()
+
 	if event.Room == nil || event.Participant == nil {
 		return nil
 	}
 
-	log.Printf("✅ 参与者已加入: %s (Identity: %s) 房间: %s",
-		event.Participant.Name, event.Participant.Identity, event.Room.Name)
+	logger.Info("参与者已加入",
+		zap.String("participant_name", event.Participant.Name),
+		zap.String("participant_identity", event.Participant.Identity),
+		zap.String("room_name", event.Room.Name),
+	)
 
 	// 可以在这里添加业务逻辑
 	// - 更新参与者状态
@@ -138,18 +177,27 @@ func (ws *WebhookService) handleParticipantJoined(event *models.WebhookEvent) er
 
 // handleParticipantLeft 处理参与者离开事件
 func (ws *WebhookService) handleParticipantLeft(event *models.WebhookEvent) error {
+	logger := utils.GetLogger()
+
 	if event.Room == nil || event.Participant == nil {
 		return nil
 	}
 
-	log.Printf("✅ 参与者已离开: %s (Identity: %s) 房间: %s",
-		event.Participant.Name, event.Participant.Identity, event.Room.Name)
+	logger.Info("参与者已离开",
+		zap.String("participant_name", event.Participant.Name),
+		zap.String("participant_identity", event.Participant.Identity),
+		zap.String("room_name", event.Room.Name),
+	)
 
 	// 更新参与者状态为已挂断
 	if err := ws.db.Model(&models.Participant{}).
 		Where("uid = ? AND room_id = ?", event.Participant.Identity, event.Room.Name).
 		Update("status", models.ParticipantStatusHangup).Error; err != nil {
-		log.Printf("❌ 更新参与者状态失败: %v", err)
+		logger.Error("更新参与者状态失败",
+			zap.String("participant_uid", event.Participant.Identity),
+			zap.String("room_id", event.Room.Name),
+			zap.Error(err),
+		)
 		return err
 	}
 
