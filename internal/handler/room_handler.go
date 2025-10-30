@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"time"
 
 	"tgo-call-server/internal/errors"
 	"tgo-call-server/internal/i18n"
@@ -16,7 +17,8 @@ import (
 
 // RoomHandler 房间处理器
 type RoomHandler struct {
-	roomService *service.RoomService
+	roomService            *service.RoomService
+	businessWebhookService *service.BusinessWebhookService
 }
 
 // NewRoomHandler 创建房间处理器
@@ -24,6 +26,11 @@ func NewRoomHandler(roomService *service.RoomService) *RoomHandler {
 	return &RoomHandler{
 		roomService: roomService,
 	}
+}
+
+// SetBusinessWebhookService 设置业务 webhook 服务
+func (rh *RoomHandler) SetBusinessWebhookService(bws *service.BusinessWebhookService) {
+	rh.businessWebhookService = bws
 }
 
 // CreateRoom 创建房间
@@ -72,6 +79,19 @@ func (rh *RoomHandler) CreateRoom(c *gin.Context) {
 			})
 		}
 		return
+	}
+
+	// 发送业务 webhook 事件
+	if rh.businessWebhookService != nil && resp != nil {
+		eventData := &models.RoomEventData{
+			RoomID:          resp.RoomID,
+			Creator:         resp.Creator,
+			Status:          int(resp.Status),
+			MaxParticipants: resp.MaxParticipants,
+			CreatedAt:       time.Now().Unix(),
+			UpdatedAt:       time.Now().Unix(),
+		}
+		_ = rh.businessWebhookService.SendEvent(models.BusinessEventRoomCreated, eventData)
 	}
 
 	c.JSON(http.StatusCreated, resp)

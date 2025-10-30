@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"time"
 
 	"tgo-call-server/internal/errors"
 	"tgo-call-server/internal/i18n"
@@ -16,7 +17,8 @@ import (
 
 // ParticipantHandler 参与者处理器
 type ParticipantHandler struct {
-	participantService *service.ParticipantService
+	participantService     *service.ParticipantService
+	businessWebhookService *service.BusinessWebhookService
 }
 
 // NewParticipantHandler 创建参与者处理器
@@ -24,6 +26,11 @@ func NewParticipantHandler(participantService *service.ParticipantService) *Part
 	return &ParticipantHandler{
 		participantService: participantService,
 	}
+}
+
+// SetBusinessWebhookService 设置业务 webhook 服务
+func (ph *ParticipantHandler) SetBusinessWebhookService(bws *service.BusinessWebhookService) {
+	ph.businessWebhookService = bws
 }
 
 // JoinRoom 参与者加入房间
@@ -78,6 +85,19 @@ func (ph *ParticipantHandler) JoinRoom(c *gin.Context) {
 			})
 		}
 		return
+	}
+
+	// 发送业务 webhook 事件
+	if ph.businessWebhookService != nil && resp != nil {
+		eventData := &models.ParticipantEventData{
+			RoomID:    req.RoomID,
+			UID:       req.UID,
+			Status:    models.ParticipantStatusJoined,
+			JoinTime:  time.Now().Unix(),
+			CreatedAt: time.Now().Unix(),
+			UpdatedAt: time.Now().Unix(),
+		}
+		_ = ph.businessWebhookService.SendEvent(models.BusinessEventParticipantJoined, eventData)
 	}
 
 	c.JSON(http.StatusOK, resp)

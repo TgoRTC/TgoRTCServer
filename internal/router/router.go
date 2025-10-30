@@ -25,6 +25,7 @@ func SetupRouter(db *gorm.DB, redisClient *redis.Client, cfg *config.Config) *gi
 	// 初始化服务层
 	roomService := service.NewRoomService(db, tokenGenerator)
 	participantService := service.NewParticipantService(db, tokenGenerator)
+	businessWebhookService := service.NewBusinessWebhookService(db, cfg)
 
 	// 初始化处理器
 	roomHandler := handler.NewRoomHandler(roomService)
@@ -34,6 +35,10 @@ func SetupRouter(db *gorm.DB, redisClient *redis.Client, cfg *config.Config) *gi
 	webhookService := service.NewWebhookService(db)
 	webhookValidator := livekit.NewWebhookValidator(cfg.LiveKitAPIKey, cfg.LiveKitAPISecret)
 	webhookHandler := handler.NewWebhookHandler(webhookService, webhookValidator)
+
+	// 将业务 webhook 服务注入到处理器中
+	participantHandler.SetBusinessWebhookService(businessWebhookService)
+	roomHandler.SetBusinessWebhookService(businessWebhookService)
 
 	// 健康检查
 	router.GET("/health", func(c *gin.Context) {
