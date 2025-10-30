@@ -140,6 +140,7 @@ func (ws *WebhookService) handleRoomFinished(event *models.WebhookEvent) error {
 	)
 
 	// 更新房间状态为已结束
+	var room models.Room
 	if err := ws.db.Model(&models.Room{}).
 		Where("room_id = ?", event.Room.Name).
 		Update("status", models.RoomStatusFinished).Error; err != nil {
@@ -148,6 +149,52 @@ func (ws *WebhookService) handleRoomFinished(event *models.WebhookEvent) error {
 			zap.Error(err),
 		)
 		return err
+	}
+
+	// 查询房间信息（用于后续 webhook 通知）
+	if err := ws.db.Where("room_id = ?", event.Room.Name).First(&room).Error; err != nil {
+		logger.Error("查询房间信息失败",
+			zap.String("room_id", event.Room.Name),
+			zap.Error(err),
+		)
+		// 继续执行，不返回错误
+	}
+
+	// 1、查询该房间中的成员，如果 status=0/1 的成员全部改成 ParticipantStatusHangup
+	if err := ws.db.Model(&models.Participant{}).
+		Where("room_id = ? AND (status = ? OR status = ?)", event.Room.Name, models.ParticipantStatusInviting, models.ParticipantStatusJoined).
+		Update("status", models.ParticipantStatusHangup).Error; err != nil {
+		logger.Error("更新房间参与者状态失败",
+			zap.String("room_id", event.Room.Name),
+			zap.Error(err),
+		)
+		// 继续执行，不返回错误
+	} else {
+		logger.Info("房间参与者状态已更新为已挂断",
+			zap.String("room_id", event.Room.Name),
+		)
+	}
+
+	// 2、通知业务的 webhook
+	if ws.businessWebhookService != nil {
+		eventData := &models.RoomEventData{
+			RoomID:          room.RoomID,
+			Creator:         room.Creator,
+			CallType:        int(room.CallType),
+			InviteOn:        int(room.InviteOn),
+			Status:          int(models.RoomStatusFinished),
+			MaxParticipants: room.MaxParticipants,
+			CreatedAt:       room.CreatedAt.Unix(),
+			UpdatedAt:       room.UpdatedAt.Unix(),
+		}
+		if err := ws.businessWebhookService.SendEvent(models.BusinessEventRoomFinished, eventData); err != nil {
+			logger.Error("发送业务 webhook 事件失败",
+				zap.String("room_id", room.RoomID),
+				zap.String("event_type", models.BusinessEventRoomFinished),
+				zap.Error(err),
+			)
+			// 不返回错误，因为房间状态已经更新成功
+		}
 	}
 
 	return nil

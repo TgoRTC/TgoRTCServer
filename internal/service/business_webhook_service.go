@@ -57,7 +57,7 @@ func (bws *BusinessWebhookService) SendEvent(eventType string, data interface{})
 	}
 
 	// 序列化事件
-	payload, err := json.Marshal(event)
+	payload, err := json.Marshal(data)
 	if err != nil {
 		logger.Error("序列化 webhook 事件失败",
 			zap.String("event_type", eventType),
