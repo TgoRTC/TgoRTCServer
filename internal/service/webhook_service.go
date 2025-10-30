@@ -305,6 +305,7 @@ func (ws *WebhookService) handleParticipantLeft(event *models.WebhookEvent) erro
 	)
 
 	// 更新参与者状态为已挂断
+	var leftParticipant models.Participant
 	if err := ws.db.Model(&models.Participant{}).
 		Where("uid = ? AND room_id = ?", event.Participant.Identity, event.Room.Name).
 		Update("status", models.ParticipantStatusHangup).Error; err != nil {
@@ -314,6 +315,102 @@ func (ws *WebhookService) handleParticipantLeft(event *models.WebhookEvent) erro
 			zap.Error(err),
 		)
 		return err
+	}
+
+	// 查询离开的参与者信息
+	if err := ws.db.Where("uid = ? AND room_id = ?", event.Participant.Identity, event.Room.Name).First(&leftParticipant).Error; err != nil {
+		logger.Error("查询参与者信息失败",
+			zap.String("participant_uid", event.Participant.Identity),
+			zap.String("room_id", event.Room.Name),
+			zap.Error(err),
+		)
+	}
+
+	// 1、查询房间信息
+	var room models.Room
+	if err := ws.db.Where("room_id = ?", event.Room.Name).First(&room).Error; err != nil {
+		logger.Error("查询房间信息失败",
+			zap.String("room_id", event.Room.Name),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	// 2、检查是否需要标记房间为已结束
+	shouldFinishRoom := false
+
+	// 情况1：房间的 max_participants=2，则标记房间已经结束
+	if room.MaxParticipants == 2 {
+		shouldFinishRoom = true
+		logger.Info("房间为双人通话，标记房间已结束",
+			zap.String("room_id", event.Room.Name),
+			zap.Int("max_participants", room.MaxParticipants),
+		)
+
+		// 如果另外一个参与者 status=0（邀请中），将其改为 ParticipantStatusTimeout
+		if err := ws.db.Model(&models.Participant{}).
+			Where("room_id = ? AND uid != ? AND status = ?", event.Room.Name, event.Participant.Identity, models.ParticipantStatusInviting).
+			Update("status", models.ParticipantStatusTimeout).Error; err != nil {
+			logger.Error("更新其他参与者状态失败",
+				zap.String("room_id", event.Room.Name),
+				zap.Error(err),
+			)
+		} else {
+			logger.Info("其他邀请中的参与者状态已更新为超时",
+				zap.String("room_id", event.Room.Name),
+			)
+		}
+	} else {
+		// 情况2：检查房间中是否所有参与者都已离开（status=3）
+		var activeParticipantCount int64
+		if err := ws.db.Where("room_id = ? AND status IN (?, ?)", event.Room.Name, models.ParticipantStatusInviting, models.ParticipantStatusJoined).
+			Count(&activeParticipantCount).Error; err != nil {
+			logger.Error("查询活跃参与者数失败",
+				zap.String("room_id", event.Room.Name),
+				zap.Error(err),
+			)
+		} else if activeParticipantCount == 0 {
+			shouldFinishRoom = true
+			logger.Info("房间中所有参与者都已离开，标记房间已结束",
+				zap.String("room_id", event.Room.Name),
+			)
+		}
+	}
+
+	// 如果需要标记房间为已结束，则更新房间状态
+	if shouldFinishRoom && room.Status != models.RoomStatusFinished {
+		if err := ws.db.Model(&room).Update("status", models.RoomStatusFinished).Error; err != nil {
+			logger.Error("更新房间状态为已结束失败",
+				zap.String("room_id", event.Room.Name),
+				zap.Error(err),
+			)
+		} else {
+			logger.Info("房间状态已更新为已结束",
+				zap.String("room_id", event.Room.Name),
+			)
+		}
+	}
+
+	// 3、通知业务的 webhook
+	if ws.businessWebhookService != nil {
+		eventData := &models.ParticipantEventData{
+			RoomID:    leftParticipant.RoomID,
+			UID:       leftParticipant.UID,
+			Status:    int(leftParticipant.Status),
+			JoinTime:  leftParticipant.JoinTime,
+			LeaveTime: leftParticipant.LeaveTime,
+			CreatedAt: leftParticipant.CreatedAt.Unix(),
+			UpdatedAt: leftParticipant.UpdatedAt.Unix(),
+		}
+		if err := ws.businessWebhookService.SendEvent(models.BusinessEventParticipantLeft, eventData); err != nil {
+			logger.Error("发送业务 webhook 事件失败",
+				zap.String("room_id", leftParticipant.RoomID),
+				zap.String("uid", leftParticipant.UID),
+				zap.String("event_type", models.BusinessEventParticipantLeft),
+				zap.Error(err),
+			)
+			// 不返回错误，因为参与者状态已经更新成功
+		}
 	}
 
 	return nil
