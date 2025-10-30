@@ -42,7 +42,7 @@ func (bws *BusinessWebhookService) SendEvent(eventType string, data interface{})
 	logger := utils.GetLogger()
 
 	// 检查是否启用业务 webhook
-	if !bws.config.BusinessWebhookEnabled || len(bws.config.BusinessWebhookURLs) == 0 {
+	if !bws.config.BusinessWebhookEnabled || bws.config.BusinessWebhookURL == "" {
 		return nil
 	}
 
@@ -65,10 +65,8 @@ func (bws *BusinessWebhookService) SendEvent(eventType string, data interface{})
 		return err
 	}
 
-	// 发送到所有配置的 URL
-	for _, url := range bws.config.BusinessWebhookURLs {
-		go bws.sendToURL(url, event, payload)
-	}
+	// 异步发送到配置的 URL
+	go bws.sendToURL(bws.config.BusinessWebhookURL, event, payload)
 
 	return nil
 }

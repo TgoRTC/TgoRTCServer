@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"tgo-call-server/internal/models"
+
 	"gorm.io/gorm"
 )
 
@@ -26,19 +27,19 @@ func (ws *WebhookService) HandleWebhookEvent(event *models.WebhookEvent) error {
 
 	switch event.Event {
 	case models.WebhookEventRoomStarted:
-		return ws.handleRoomStarted(event)
+		return ws.handleRoomStarted(event) // 房间开始
 	case models.WebhookEventRoomFinished:
-		return ws.handleRoomFinished(event)
+		return ws.handleRoomFinished(event) // 房间结束
 	case models.WebhookEventParticipantJoined:
-		return ws.handleParticipantJoined(event)
+		return ws.handleParticipantJoined(event) // 参与者加入房间
 	case models.WebhookEventParticipantLeft:
-		return ws.handleParticipantLeft(event)
-	case models.WebhookEventParticipantConnectionAborted:
-		return ws.handleParticipantConnectionAborted(event)
-	case models.WebhookEventTrackPublished:
-		return ws.handleTrackPublished(event)
-	case models.WebhookEventTrackUnpublished:
-		return ws.handleTrackUnpublished(event)
+		return ws.handleParticipantLeft(event) // 参与者离开房间
+	// case models.WebhookEventParticipantConnectionAborted:
+	// 	return ws.handleParticipantConnectionAborted(event)
+	// case models.WebhookEventTrackPublished:
+	// 	return ws.handleTrackPublished(event)
+	// case models.WebhookEventTrackUnpublished:
+	// 	return ws.handleTrackUnpublished(event)
 	default:
 		log.Printf("⚠️  未知的 webhook 事件类型: %s", event.Event)
 		return nil
@@ -117,41 +118,41 @@ func (ws *WebhookService) handleParticipantLeft(event *models.WebhookEvent) erro
 	return nil
 }
 
-// handleParticipantConnectionAborted 处理参与者连接中止事件
-func (ws *WebhookService) handleParticipantConnectionAborted(event *models.WebhookEvent) error {
-	if event.Room == nil || event.Participant == nil {
-		return nil
-	}
+// // handleParticipantConnectionAborted 处理参与者连接中止事件
+// func (ws *WebhookService) handleParticipantConnectionAborted(event *models.WebhookEvent) error {
+// 	if event.Room == nil || event.Participant == nil {
+// 		return nil
+// 	}
 
-	log.Printf("⚠️  参与者连接已中止: %s (Identity: %s) 房间: %s",
-		event.Participant.Name, event.Participant.Identity, event.Room.Name)
+// 	log.Printf("⚠️  参与者连接已中止: %s (Identity: %s) 房间: %s",
+// 		event.Participant.Name, event.Participant.Identity, event.Room.Name)
 
-	return nil
-}
+// 	return nil
+// }
 
-// handleTrackPublished 处理轨道发布事件
-func (ws *WebhookService) handleTrackPublished(event *models.WebhookEvent) error {
-	if event.Room == nil || event.Participant == nil || event.Track == nil {
-		return nil
-	}
+// // handleTrackPublished 处理轨道发布事件
+// func (ws *WebhookService) handleTrackPublished(event *models.WebhookEvent) error {
+// 	if event.Room == nil || event.Participant == nil || event.Track == nil {
+// 		return nil
+// 	}
 
-	log.Printf("✅ 轨道已发布: %s (Type: %s) 参与者: %s 房间: %s",
-		event.Track.Name, event.Track.Type, event.Participant.Identity, event.Room.Name)
+// 	log.Printf("✅ 轨道已发布: %s (Type: %s) 参与者: %s 房间: %s",
+// 		event.Track.Name, event.Track.Type, event.Participant.Identity, event.Room.Name)
 
-	return nil
-}
+// 	return nil
+// }
 
-// handleTrackUnpublished 处理轨道取消发布事件
-func (ws *WebhookService) handleTrackUnpublished(event *models.WebhookEvent) error {
-	if event.Room == nil || event.Participant == nil || event.Track == nil {
-		return nil
-	}
+// // handleTrackUnpublished 处理轨道取消发布事件
+// func (ws *WebhookService) handleTrackUnpublished(event *models.WebhookEvent) error {
+// 	if event.Room == nil || event.Participant == nil || event.Track == nil {
+// 		return nil
+// 	}
 
-	log.Printf("✅ 轨道已取消发布: %s (Type: %s) 参与者: %s 房间: %s",
-		event.Track.Name, event.Track.Type, event.Participant.Identity, event.Room.Name)
+// 	log.Printf("✅ 轨道已取消发布: %s (Type: %s) 参与者: %s 房间: %s",
+// 		event.Track.Name, event.Track.Type, event.Participant.Identity, event.Room.Name)
 
-	return nil
-}
+// 	return nil
+// }
 
 // ParseWebhookEvent 解析 webhook 事件
 func ParseWebhookEvent(body []byte) (*models.WebhookEvent, error) {
@@ -161,4 +162,3 @@ func ParseWebhookEvent(body []byte) (*models.WebhookEvent, error) {
 	}
 	return &event, nil
 }
-
