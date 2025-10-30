@@ -35,6 +35,7 @@ func SetupRouter(db *gorm.DB, redisClient *redis.Client, cfg *config.Config) *gi
 	webhookService := service.NewWebhookService(db)
 	webhookValidator := livekit.NewWebhookValidator(cfg.LiveKitAPIKey, cfg.LiveKitAPISecret)
 	webhookHandler := handler.NewWebhookHandler(webhookService, webhookValidator)
+	webhookLogHandler := handler.NewWebhookLogHandler(businessWebhookService)
 
 	// 将业务 webhook 服务注入到处理器中
 	participantHandler.SetBusinessWebhookService(businessWebhookService)
@@ -68,7 +69,9 @@ func SetupRouter(db *gorm.DB, redisClient *redis.Client, cfg *config.Config) *gi
 		// Webhook 相关接口
 		webhooks := api.Group("/webhooks")
 		{
-			webhooks.POST("/livekit", webhookHandler.HandleWebhook) // LiveKit webhook
+			webhooks.POST("/livekit", webhookHandler.HandleWebhook)       // LiveKit webhook
+			webhooks.GET("/logs/stats", webhookLogHandler.GetLogStats)    // 获取日志统计
+			webhooks.POST("/logs/cleanup", webhookLogHandler.CleanupLogs) // 手动清理日志
 		}
 	}
 

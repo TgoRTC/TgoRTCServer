@@ -47,6 +47,11 @@ func main() {
 	scheduler.Start()
 	defer scheduler.Stop()
 
+	// 启动 webhook 日志清理定时器
+	logCleanup := service.NewWebhookLogCleanupService(db, cfg)
+	logCleanup.Start()
+	defer logCleanup.Stop()
+
 	// 启动服务器
 	port := cfg.Port
 	if port == "" {

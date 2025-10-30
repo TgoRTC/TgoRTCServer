@@ -41,6 +41,11 @@ type Config struct {
 	BusinessWebhookSecret  string   // 业务 webhook 签名密钥
 	BusinessWebhookTimeout int      // webhook 请求超时时间（秒），默认 10 秒
 
+	// 业务 Webhook 日志清理配置
+	BusinessWebhookLogRetentionDays   int  // 日志保留天数，默认 30 天
+	BusinessWebhookLogCleanupEnabled  bool // 是否启用日志自动清理
+	BusinessWebhookLogCleanupInterval int  // 日志清理间隔（秒），默认 86400（1 天）
+
 	// LiveKit Webhook 配置（接收 LiveKit 事件）
 	WebhookEnabled bool
 	WebhookSecret  string
@@ -96,6 +101,26 @@ func LoadConfig() *Config {
 		}
 	}
 
+	// 业务 webhook 日志清理配置
+	businessWebhookLogRetentionDays := 30 // 默认保留 30 天
+	if days := os.Getenv("BUSINESS_WEBHOOK_LOG_RETENTION_DAYS"); days != "" {
+		if d, err := strconv.Atoi(days); err == nil && d > 0 {
+			businessWebhookLogRetentionDays = d
+		}
+	}
+
+	businessWebhookLogCleanupEnabled := false
+	if os.Getenv("BUSINESS_WEBHOOK_LOG_CLEANUP_ENABLED") == "true" {
+		businessWebhookLogCleanupEnabled = true
+	}
+
+	businessWebhookLogCleanupInterval := 86400 // 默认 1 天
+	if interval := os.Getenv("BUSINESS_WEBHOOK_LOG_CLEANUP_INTERVAL"); interval != "" {
+		if i, err := strconv.Atoi(interval); err == nil && i > 0 {
+			businessWebhookLogCleanupInterval = i
+		}
+	}
+
 	return &Config{
 		// 服务配置
 		Port:     getEnv("PORT", "8080"),
@@ -129,6 +154,11 @@ func LoadConfig() *Config {
 		BusinessWebhookURLs:    businessWebhookURLs,
 		BusinessWebhookSecret:  getEnv("BUSINESS_WEBHOOK_SECRET", ""),
 		BusinessWebhookTimeout: businessWebhookTimeout,
+
+		// 业务 Webhook 日志清理配置
+		BusinessWebhookLogRetentionDays:   businessWebhookLogRetentionDays,
+		BusinessWebhookLogCleanupEnabled:  businessWebhookLogCleanupEnabled,
+		BusinessWebhookLogCleanupInterval: businessWebhookLogCleanupInterval,
 
 		// LiveKit Webhook 配置
 		WebhookEnabled: webhookEnabled,

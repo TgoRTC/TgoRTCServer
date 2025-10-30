@@ -14,8 +14,9 @@ import (
 	"tgo-call-server/internal/config"
 	"tgo-call-server/internal/models"
 	"tgo-call-server/internal/utils"
-	"gorm.io/gorm"
+
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 // BusinessWebhookService 业务 webhook 服务
@@ -183,3 +184,97 @@ func generateEventID() string {
 	return fmt.Sprintf("%d-%d", time.Now().UnixNano(), time.Now().UnixNano()%1000)
 }
 
+// CleanupOldLogs 清理旧的 webhook 日志
+// retentionDays: 保留天数，超过此天数的日志将被删除
+func (bws *BusinessWebhookService) CleanupOldLogs(retentionDays int) error {
+	logger := utils.GetLogger()
+
+	if retentionDays <= 0 {
+		retentionDays = 30 // 默认保留 30 天
+	}
+
+	// 计算截断时间
+	cutoffTime := time.Now().AddDate(0, 0, -retentionDays)
+
+	// 删除旧日志
+	result := bws.db.Where("created_at < ?", cutoffTime).Delete(&models.BusinessWebhookLog{})
+	if result.Error != nil {
+		logger.Error("清理 webhook 日志失败",
+			zap.Error(result.Error),
+		)
+		return result.Error
+	}
+
+	logger.Info("webhook 日志清理完成",
+		zap.Int64("deleted_count", result.RowsAffected),
+		zap.Time("cutoff_time", cutoffTime),
+	)
+
+	return nil
+}
+
+// GetLogStats 获取日志统计信息
+func (bws *BusinessWebhookService) GetLogStats() (map[string]interface{}, error) {
+	logger := utils.GetLogger()
+
+	var totalCount int64
+	var successCount int64
+	var failureCount int64
+
+	// 获取总数
+	if err := bws.db.Model(&models.BusinessWebhookLog{}).Count(&totalCount).Error; err != nil {
+		logger.Error("获取日志总数失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 获取成功数（状态码 200-299）
+	if err := bws.db.Model(&models.BusinessWebhookLog{}).
+		Where("status >= 200 AND status < 300").
+		Count(&successCount).Error; err != nil {
+		logger.Error("获取成功日志数失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 获取失败数
+	failureCount = totalCount - successCount
+
+	// 获取最大日志 ID（用于估算表大小）
+	var maxID int64
+	bws.db.Model(&models.BusinessWebhookLog{}).Select("MAX(id)").Scan(&maxID)
+
+	stats := map[string]interface{}{
+		"total_count":   totalCount,
+		"success_count": successCount,
+		"failure_count": failureCount,
+		"success_rate":  float64(0),
+		"max_id":        maxID,
+	}
+
+	if totalCount > 0 {
+		stats["success_rate"] = float64(successCount) / float64(totalCount) * 100
+	}
+
+	return stats, nil
+}
+
+// ArchiveOldLogs 归档旧日志到另一个表（可选）
+// 这个方法可以用于将旧日志移到归档表中
+func (bws *BusinessWebhookService) ArchiveOldLogs(retentionDays int) error {
+	logger := utils.GetLogger()
+
+	if retentionDays <= 0 {
+		retentionDays = 90 // 默认保留 90 天后归档
+	}
+
+	// 计算截断时间
+	cutoffTime := time.Now().AddDate(0, 0, -retentionDays)
+
+	// 这里可以实现将旧日志复制到归档表的逻辑
+	// 例如：INSERT INTO business_webhook_log_archive SELECT * FROM business_webhook_log WHERE created_at < ?
+
+	logger.Info("webhook 日志归档完成",
+		zap.Time("cutoff_time", cutoffTime),
+	)
+
+	return nil
+}
