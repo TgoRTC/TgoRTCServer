@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"tgo-call-server/internal/config"
@@ -72,19 +73,38 @@ func (bws *BusinessWebhookService) SendEvent(eventType string, data interface{})
 }
 
 // sendToURL 发送事件到指定 URL
-func (bws *BusinessWebhookService) sendToURL(url string, event *models.BusinessWebhookEvent, payload []byte) {
+func (bws *BusinessWebhookService) sendToURL(baseURL string, event *models.BusinessWebhookEvent, payload []byte) {
 	logger := utils.GetLogger()
 
+	// 构建带有 event 参数的 URL
+	// 格式: baseURL?event=room_started
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		logger.Error("解析 webhook URL 失败",
+			zap.String("url", baseURL),
+			zap.String("event_id", event.EventID),
+			zap.Error(err),
+		)
+		bws.logWebhookAttempt(event, baseURL, 0, "", err.Error())
+		return
+	}
+
+	// 添加 event 查询参数
+	q := u.Query()
+	q.Set("event", event.EventType)
+	u.RawQuery = q.Encode()
+	finalURL := u.String()
+
 	// 创建请求
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
+	req, err := http.NewRequest("POST", finalURL, bytes.NewBuffer(payload))
 	if err != nil {
 		logger.Error("创建 webhook 请求失败",
-			zap.String("url", url),
+			zap.String("url", finalURL),
 			zap.String("event_id", event.EventID),
 			zap.Error(err),
 		)
 		// 记录请求创建失败
-		bws.logWebhookAttempt(event, url, 0, "", err.Error())
+		bws.logWebhookAttempt(event, finalURL, 0, "", err.Error())
 		return
 	}
 
@@ -102,12 +122,12 @@ func (bws *BusinessWebhookService) sendToURL(url string, event *models.BusinessW
 	resp, err := bws.client.Do(req)
 	if err != nil {
 		logger.Error("发送 webhook 请求失败",
-			zap.String("url", url),
+			zap.String("url", finalURL),
 			zap.String("event_id", event.EventID),
 			zap.Error(err),
 		)
 		// 记录网络错误
-		bws.logWebhookAttempt(event, url, 0, "", err.Error())
+		bws.logWebhookAttempt(event, finalURL, 0, "", err.Error())
 		return
 	}
 	defer resp.Body.Close()
@@ -116,19 +136,19 @@ func (bws *BusinessWebhookService) sendToURL(url string, event *models.BusinessW
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		logger.Error("读取 webhook 响应失败",
-			zap.String("url", url),
+			zap.String("url", finalURL),
 			zap.String("event_id", event.EventID),
 			zap.Error(err),
 		)
 		// 记录响应读取失败
-		bws.logWebhookAttempt(event, url, resp.StatusCode, "", err.Error())
+		bws.logWebhookAttempt(event, finalURL, resp.StatusCode, "", err.Error())
 		return
 	}
 
 	// 检查响应状态
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		logger.Info("webhook 事件发送成功",
-			zap.String("url", url),
+			zap.String("url", finalURL),
 			zap.String("event_type", event.EventType),
 			zap.String("event_id", event.EventID),
 			zap.Int("status_code", resp.StatusCode),
@@ -136,14 +156,14 @@ func (bws *BusinessWebhookService) sendToURL(url string, event *models.BusinessW
 		// 成功的请求不记录日志
 	} else {
 		logger.Warn("webhook 事件发送失败",
-			zap.String("url", url),
+			zap.String("url", finalURL),
 			zap.String("event_type", event.EventType),
 			zap.String("event_id", event.EventID),
 			zap.Int("status_code", resp.StatusCode),
 			zap.String("response", string(respBody)),
 		)
 		// 只记录失败的请求
-		bws.logWebhookAttempt(event, url, resp.StatusCode, string(respBody), "HTTP "+fmt.Sprintf("%d", resp.StatusCode))
+		bws.logWebhookAttempt(event, finalURL, resp.StatusCode, string(respBody), "HTTP "+fmt.Sprintf("%d", resp.StatusCode))
 	}
 }
 
