@@ -85,6 +85,7 @@ func (bws *BusinessWebhookService) sendToURL(url string, event *models.BusinessW
 			zap.String("event_id", event.EventID),
 			zap.Error(err),
 		)
+		// 记录请求创建失败
 		bws.logWebhookAttempt(event, url, 0, "", err.Error())
 		return
 	}
@@ -107,6 +108,7 @@ func (bws *BusinessWebhookService) sendToURL(url string, event *models.BusinessW
 			zap.String("event_id", event.EventID),
 			zap.Error(err),
 		)
+		// 记录网络错误
 		bws.logWebhookAttempt(event, url, 0, "", err.Error())
 		return
 	}
@@ -120,6 +122,7 @@ func (bws *BusinessWebhookService) sendToURL(url string, event *models.BusinessW
 			zap.String("event_id", event.EventID),
 			zap.Error(err),
 		)
+		// 记录响应读取失败
 		bws.logWebhookAttempt(event, url, resp.StatusCode, "", err.Error())
 		return
 	}
@@ -132,7 +135,7 @@ func (bws *BusinessWebhookService) sendToURL(url string, event *models.BusinessW
 			zap.String("event_id", event.EventID),
 			zap.Int("status_code", resp.StatusCode),
 		)
-		bws.logWebhookAttempt(event, url, resp.StatusCode, string(respBody), "")
+		// 成功的请求不记录日志
 	} else {
 		logger.Warn("webhook 事件发送失败",
 			zap.String("url", url),
@@ -141,6 +144,7 @@ func (bws *BusinessWebhookService) sendToURL(url string, event *models.BusinessW
 			zap.Int("status_code", resp.StatusCode),
 			zap.String("response", string(respBody)),
 		)
+		// 只记录失败的请求
 		bws.logWebhookAttempt(event, url, resp.StatusCode, string(respBody), "HTTP "+fmt.Sprintf("%d", resp.StatusCode))
 	}
 }
@@ -214,44 +218,42 @@ func (bws *BusinessWebhookService) CleanupOldLogs(retentionDays int) error {
 }
 
 // GetLogStats 获取日志统计信息
+// 注意：日志表只记录失败的请求，所以这里统计的都是失败的请求
 func (bws *BusinessWebhookService) GetLogStats() (map[string]interface{}, error) {
 	logger := utils.GetLogger()
 
-	var totalCount int64
-	var successCount int64
-	var failureCount int64
+	var totalFailureCount int64
 
-	// 获取总数
-	if err := bws.db.Model(&models.BusinessWebhookLog{}).Count(&totalCount).Error; err != nil {
-		logger.Error("获取日志总数失败", zap.Error(err))
+	// 获取失败日志总数
+	if err := bws.db.Model(&models.BusinessWebhookLog{}).Count(&totalFailureCount).Error; err != nil {
+		logger.Error("获取失败日志总数失败", zap.Error(err))
 		return nil, err
 	}
-
-	// 获取成功数（状态码 200-299）
-	if err := bws.db.Model(&models.BusinessWebhookLog{}).
-		Where("status >= 200 AND status < 300").
-		Count(&successCount).Error; err != nil {
-		logger.Error("获取成功日志数失败", zap.Error(err))
-		return nil, err
-	}
-
-	// 获取失败数
-	failureCount = totalCount - successCount
 
 	// 获取最大日志 ID（用于估算表大小）
 	var maxID int64
 	bws.db.Model(&models.BusinessWebhookLog{}).Select("MAX(id)").Scan(&maxID)
 
-	stats := map[string]interface{}{
-		"total_count":   totalCount,
-		"success_count": successCount,
-		"failure_count": failureCount,
-		"success_rate":  float64(0),
-		"max_id":        maxID,
+	// 按事件类型统计失败数
+	type EventStats struct {
+		EventType string
+		Count     int64
+	}
+	var eventStats []EventStats
+	bws.db.Model(&models.BusinessWebhookLog{}).
+		Select("event_type, COUNT(*) as count").
+		Group("event_type").
+		Scan(&eventStats)
+
+	eventStatsMap := make(map[string]int64)
+	for _, stat := range eventStats {
+		eventStatsMap[stat.EventType] = stat.Count
 	}
 
-	if totalCount > 0 {
-		stats["success_rate"] = float64(successCount) / float64(totalCount) * 100
+	stats := map[string]interface{}{
+		"total_failure_count": totalFailureCount,
+		"failure_by_event":    eventStatsMap,
+		"max_id":              maxID,
 	}
 
 	return stats, nil
