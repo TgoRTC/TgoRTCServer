@@ -44,19 +44,10 @@ type Config struct {
 	BusinessWebhookLogRetentionDays   int  // 日志保留天数，默认 30 天
 	BusinessWebhookLogCleanupEnabled  bool // 是否启用日志自动清理
 	BusinessWebhookLogCleanupInterval int  // 日志清理间隔（秒），默认 86400（1 天）
-
-	// LiveKit Webhook 配置（接收 LiveKit 事件）
-	WebhookEnabled bool
-	WebhookSecret  string
 }
 
 // LoadConfig 从环境变量加载配置
 func LoadConfig() *Config {
-	webhookEnabled := false
-	if os.Getenv("WEBHOOK_ENABLED") == "true" {
-		webhookEnabled = true
-	}
-
 	redisDB := 0
 	if db := os.Getenv("REDIS_DB"); db != "" {
 		if d, err := strconv.Atoi(db); err == nil {
@@ -94,7 +85,7 @@ func LoadConfig() *Config {
 	}
 
 	// 业务 webhook 日志清理配置
-	businessWebhookLogRetentionDays := 30 // 默认保留 30 天
+	businessWebhookLogRetentionDays := 7 // 默认保留 7 天
 	if days := os.Getenv("BUSINESS_WEBHOOK_LOG_RETENTION_DAYS"); days != "" {
 		if d, err := strconv.Atoi(days); err == nil && d > 0 {
 			businessWebhookLogRetentionDays = d
@@ -151,10 +142,6 @@ func LoadConfig() *Config {
 		BusinessWebhookLogRetentionDays:   businessWebhookLogRetentionDays,
 		BusinessWebhookLogCleanupEnabled:  businessWebhookLogCleanupEnabled,
 		BusinessWebhookLogCleanupInterval: businessWebhookLogCleanupInterval,
-
-		// LiveKit Webhook 配置
-		WebhookEnabled: webhookEnabled,
-		WebhookSecret:  getEnv("WEBHOOK_SECRET", ""),
 	}
 }
 
