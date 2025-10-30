@@ -42,8 +42,8 @@ func NewBusinessWebhookService(db *gorm.DB, cfg *config.Config) *BusinessWebhook
 func (bws *BusinessWebhookService) SendEvent(eventType string, data interface{}) error {
 	logger := utils.GetLogger()
 
-	// 检查是否配置了业务 webhook URL（如果没有配置则不发送）
-	if bws.config.BusinessWebhookURL == "" {
+	// 检查是否配置了业务 webhook URLs（如果没有配置则不发送）
+	if len(bws.config.BusinessWebhookURLs) == 0 {
 		return nil
 	}
 
@@ -66,8 +66,10 @@ func (bws *BusinessWebhookService) SendEvent(eventType string, data interface{})
 		return err
 	}
 
-	// 异步发送到配置的 URL
-	go bws.sendToURL(bws.config.BusinessWebhookURL, event, payload)
+	// 异步发送到所有配置的 URLs
+	for _, webhookURL := range bws.config.BusinessWebhookURLs {
+		go bws.sendToURL(webhookURL, event, payload)
+	}
 
 	return nil
 }

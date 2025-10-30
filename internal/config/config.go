@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 )
 
 // Config 应用配置
@@ -35,9 +36,9 @@ type Config struct {
 	ParticipantTimeoutCheckInterval int // 检查间隔，单位：秒，默认 10 秒
 
 	// 业务 Webhook 配置（用于通知其他服务）
-	BusinessWebhookURL     string // 业务 webhook URL
-	BusinessWebhookSecret  string // 业务 webhook 签名密钥
-	BusinessWebhookTimeout int    // webhook 请求超时时间（秒），默认 10 秒
+	BusinessWebhookURLs    []string // 业务 webhook URLs（支持多个地址，用逗号分隔）
+	BusinessWebhookSecret  string   // 业务 webhook 签名密钥
+	BusinessWebhookTimeout int      // webhook 请求超时时间（秒），默认 10 秒
 
 	// 业务 Webhook 日志清理配置
 	BusinessWebhookLogRetentionDays   int  // 日志保留天数，默认 7 天
@@ -68,7 +69,17 @@ func LoadConfig() *Config {
 		}
 	}
 
-	businessWebhookURL := getEnv("BUSINESS_WEBHOOK_URL", "")
+	// 解析业务 webhook URLs（支持多个地址，用逗号分隔）
+	businessWebhookURLsStr := getEnv("BUSINESS_WEBHOOK_URLS", "")
+	var businessWebhookURLs []string
+	if businessWebhookURLsStr != "" {
+		// 按逗号分隔，并去除空格
+		for _, url := range strings.Split(businessWebhookURLsStr, ",") {
+			if trimmedURL := strings.TrimSpace(url); trimmedURL != "" {
+				businessWebhookURLs = append(businessWebhookURLs, trimmedURL)
+			}
+		}
+	}
 
 	businessWebhookTimeout := 10 // 默认 10 秒
 	if timeout := os.Getenv("BUSINESS_WEBHOOK_TIMEOUT"); timeout != "" {
@@ -126,7 +137,7 @@ func LoadConfig() *Config {
 		ParticipantTimeoutCheckInterval: participantTimeoutCheckInterval,
 
 		// 业务 Webhook 配置
-		BusinessWebhookURL:     businessWebhookURL,
+		BusinessWebhookURLs:    businessWebhookURLs,
 		BusinessWebhookSecret:  getEnv("BUSINESS_WEBHOOK_SECRET", ""),
 		BusinessWebhookTimeout: businessWebhookTimeout,
 
