@@ -1,6 +1,7 @@
 package service
 
 import (
+	"strings"
 	"tgo-call-server/internal/errors"
 	"tgo-call-server/internal/i18n"
 	"tgo-call-server/internal/livekit"
@@ -32,10 +33,10 @@ func NewRoomService(db *gorm.DB, tokenGenerator *livekit.TokenGenerator) *RoomSe
 
 // CreateRoom 创建房间
 func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.CreateRoomResponse, error) {
-	// 1. 如果 room_id 没有传递，则生成 UUID
+	// 1. 如果 room_id 没有传递，则生成 UUID（去掉 '-'）
 	roomID := req.RoomID
 	if roomID == "" {
-		roomID = uuid.New().String()
+		roomID = strings.ReplaceAll(uuid.New().String(), "-", "")
 	} else {
 		// 2. 如果 room_id 已传递，检查是否已存在
 		var existingRoom models.Room

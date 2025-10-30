@@ -11,7 +11,8 @@ import (
 
 // WebhookService webhook 服务
 type WebhookService struct {
-	db *gorm.DB
+	db                     *gorm.DB
+	businessWebhookService *BusinessWebhookService
 }
 
 // NewWebhookService 创建 webhook 服务
@@ -19,6 +20,11 @@ func NewWebhookService(db *gorm.DB) *WebhookService {
 	return &WebhookService{
 		db: db,
 	}
+}
+
+// SetBusinessWebhookService 设置业务 webhook 服务
+func (ws *WebhookService) SetBusinessWebhookService(bws *BusinessWebhookService) {
+	ws.businessWebhookService = bws
 }
 
 // HandleWebhookEvent 处理 webhook 事件
@@ -54,10 +60,42 @@ func (ws *WebhookService) handleRoomStarted(event *models.WebhookEvent) error {
 
 	log.Printf("✅ 房间已开始: %s (SID: %s)", event.Room.Name, event.Room.SID)
 
-	// 可以在这里添加业务逻辑，例如：
-	// - 更新房间状态
-	// - 发送通知
-	// - 记录日志
+	// 1、查询房间是否存在，如果存在则更新状态为进行中
+	var room models.Room
+	if err := ws.db.Where("room_id = ?", event.Room.Name).First(&room).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			log.Printf("⚠️  房间不存在: %s", event.Room.Name)
+			return nil
+		}
+		log.Printf("❌ 查询房间失败: %v", err)
+		return err
+	}
+
+	// 更新房间状态为进行中
+	if err := ws.db.Model(&room).Update("status", models.RoomStatusInProgress).Error; err != nil {
+		log.Printf("❌ 更新房间状态失败: %v", err)
+		return err
+	}
+
+	log.Printf("✅ 房间状态已更新为进行中: %s", event.Room.Name)
+
+	// 2、通知业务的webhook
+	if ws.businessWebhookService != nil {
+		eventData := &models.RoomEventData{
+			RoomID:          room.RoomID,
+			Creator:         room.Creator,
+			CallType:        int(room.CallType),
+			InviteOn:        int(room.InviteOn),
+			Status:          int(models.RoomStatusInProgress),
+			MaxParticipants: room.MaxParticipants,
+			CreatedAt:       room.CreatedAt.Unix(),
+			UpdatedAt:       room.UpdatedAt.Unix(),
+		}
+		if err := ws.businessWebhookService.SendEvent(models.BusinessEventRoomStarted, eventData); err != nil {
+			log.Printf("❌ 发送业务 webhook 事件失败: %v", err)
+			// 不返回错误，因为房间状态已经更新成功
+		}
+	}
 
 	return nil
 }

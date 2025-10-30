@@ -37,9 +37,10 @@ func SetupRouter(db *gorm.DB, redisClient *redis.Client, cfg *config.Config) *gi
 	webhookHandler := handler.NewWebhookHandler(webhookService, webhookValidator)
 	webhookLogHandler := handler.NewWebhookLogHandler(businessWebhookService)
 
-	// 将业务 webhook 服务注入到处理器中
+	// 将业务 webhook 服务注入到处理器和服务中
 	participantHandler.SetBusinessWebhookService(businessWebhookService)
 	roomHandler.SetBusinessWebhookService(businessWebhookService)
+	webhookService.SetBusinessWebhookService(businessWebhookService)
 
 	// 健康检查
 	router.GET("/health", func(c *gin.Context) {
