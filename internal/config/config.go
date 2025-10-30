@@ -35,13 +35,12 @@ type Config struct {
 	ParticipantTimeoutCheckInterval int // 检查间隔，单位：秒，默认 10 秒
 
 	// 业务 Webhook 配置（用于通知其他服务）
-	BusinessWebhookEnabled bool   // 是否启用业务 webhook
 	BusinessWebhookURL     string // 业务 webhook URL
 	BusinessWebhookSecret  string // 业务 webhook 签名密钥
 	BusinessWebhookTimeout int    // webhook 请求超时时间（秒），默认 10 秒
 
 	// 业务 Webhook 日志清理配置
-	BusinessWebhookLogRetentionDays   int  // 日志保留天数，默认 30 天
+	BusinessWebhookLogRetentionDays   int  // 日志保留天数，默认 7 天
 	BusinessWebhookLogCleanupEnabled  bool // 是否启用日志自动清理
 	BusinessWebhookLogCleanupInterval int  // 日志清理间隔（秒），默认 86400（1 天）
 }
@@ -67,12 +66,6 @@ func LoadConfig() *Config {
 		if i, err := strconv.Atoi(interval); err == nil {
 			participantTimeoutCheckInterval = i
 		}
-	}
-
-	// 业务 webhook 配置
-	businessWebhookEnabled := false
-	if os.Getenv("BUSINESS_WEBHOOK_ENABLED") == "true" {
-		businessWebhookEnabled = true
 	}
 
 	businessWebhookURL := getEnv("BUSINESS_WEBHOOK_URL", "")
@@ -133,7 +126,6 @@ func LoadConfig() *Config {
 		ParticipantTimeoutCheckInterval: participantTimeoutCheckInterval,
 
 		// 业务 Webhook 配置
-		BusinessWebhookEnabled: businessWebhookEnabled,
 		BusinessWebhookURL:     businessWebhookURL,
 		BusinessWebhookSecret:  getEnv("BUSINESS_WEBHOOK_SECRET", ""),
 		BusinessWebhookTimeout: businessWebhookTimeout,

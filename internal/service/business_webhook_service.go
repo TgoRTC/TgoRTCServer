@@ -42,8 +42,8 @@ func NewBusinessWebhookService(db *gorm.DB, cfg *config.Config) *BusinessWebhook
 func (bws *BusinessWebhookService) SendEvent(eventType string, data interface{}) error {
 	logger := utils.GetLogger()
 
-	// 检查是否启用业务 webhook
-	if !bws.config.BusinessWebhookEnabled || bws.config.BusinessWebhookURL == "" {
+	// 检查是否配置了业务 webhook URL（如果没有配置则不发送）
+	if bws.config.BusinessWebhookURL == "" {
 		return nil
 	}
 
