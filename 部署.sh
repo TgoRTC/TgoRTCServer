@@ -192,6 +192,22 @@ generate_nginx_config() {
     log_info "生成 Nginx 配置..."
 
     local config_file="${CONFIG_DIR}/nginx.conf"
+    local livekit_servers=""
+
+    # 生成 LiveKit 上游服务器配置
+    if [ -z "$LIVEKIT_NODES" ]; then
+        # 单机模式：使用内置 LiveKit
+        log_info "使用内置 LiveKit 服务（单机模式）"
+        livekit_servers="        server localhost:7880 max_fails=3 fail_timeout=30s;"
+    else
+        # 集群模式：使用远程 LiveKit 节点
+        log_info "使用远程 LiveKit 节点（集群模式）: $LIVEKIT_NODES"
+        IFS=',' read -ra nodes <<< "$LIVEKIT_NODES"
+        for node in "${nodes[@]}"; do
+            node=$(echo "$node" | xargs)  # 去除空格
+            livekit_servers+="        server $node max_fails=3 fail_timeout=30s;"$'\n'
+        done
+    fi
 
     cat > "$config_file" << 'EOF'
 user nginx;
@@ -223,7 +239,7 @@ http {
     # 上游服务器配置
     upstream livekit_backend {
         least_conn;
-        server localhost:7880 max_fails=3 fail_timeout=30s;
+LIVEKIT_SERVERS_PLACEHOLDER
     }
 
     # HTTP 重定向到 HTTPS
@@ -266,8 +282,9 @@ http {
 }
 EOF
 
-    # 替换域名占位符
+    # 替换占位符
     sed -i "s|DOMAIN|$DOMAIN|g" "$config_file"
+    sed -i "s|LIVEKIT_SERVERS_PLACEHOLDER|$livekit_servers|g" "$config_file"
 
     log_success "Nginx 配置已生成"
 }
@@ -278,55 +295,30 @@ EOF
 
 generate_docker_compose() {
     log_info "生成 Docker Compose 配置..."
-    
+
     local compose_file="${DEPLOYMENT_DIR}/docker-compose.yml"
-    local nodes_array=(${NODES//,/ })
-    local num_nodes=${#nodes_array[@]}
-    
-    # 检查是否为单机部署
-    if [ $num_nodes -eq 1 ] && ([ "${nodes_array[0]}" == "localhost" ] || [ "${nodes_array[0]}" == "127.0.0.1" ]); then
-        log_info "检测到单机部署模式"
+
+    # 根据 LIVEKIT_NODES 判断是单机还是集群模式
+    if [ -z "$LIVEKIT_NODES" ]; then
+        log_info "单机模式：生成包含内置 LiveKit 的 Docker Compose"
         generate_docker_compose_single "$compose_file"
     else
-        log_info "检测到分布式部署模式 ($num_nodes 个节点)"
-        generate_docker_compose_multi "$compose_file" "$num_nodes"
+        log_info "集群模式：生成不包含 LiveKit 的 Docker Compose"
+        generate_docker_compose_single "$compose_file"
     fi
 }
 
 generate_docker_compose_single() {
     local compose_file=$1
+    local livekit_service=""
+    local redis_service=""
+    local nginx_depends=""
 
-    cat > "$compose_file" << 'EOF'
-version: '3.8'
+    # 如果没有配置远程 LiveKit 节点，则使用内置 LiveKit
+    if [ -z "$LIVEKIT_NODES" ]; then
+        log_info "生成包含内置 LiveKit 的 Docker Compose"
 
-services:
-  nginx:
-    image: nginx:alpine
-    container_name: livekit-nginx
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./volumes/letsencrypt:/etc/letsencrypt:ro
-      - ./volumes/certbot:/var/www/certbot:ro
-    networks:
-      - livekit
-    restart: unless-stopped
-    depends_on:
-      - livekit
-
-  certbot:
-    image: certbot/certbot:latest
-    container_name: livekit-certbot
-    volumes:
-      - ./volumes/letsencrypt:/etc/letsencrypt
-      - ./volumes/certbot:/var/www/certbot
-    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done"
-    networks:
-      - livekit
-    restart: unless-stopped
-
+        redis_service='
   redis:
     image: redis:7-alpine
     container_name: livekit-redis
@@ -343,8 +335,9 @@ services:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 5'
 
+        livekit_service='
   livekit:
     image: livekit/livekit-server:latest
     container_name: livekit-server
@@ -364,7 +357,45 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    restart: unless-stopped'
+
+        nginx_depends="    depends_on:
+      - livekit"
+    else
+        log_info "使用远程 LiveKit 节点，不部署内置 LiveKit"
+    fi
+
+    cat > "$compose_file" << EOF
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: livekit-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./volumes/letsencrypt:/etc/letsencrypt:ro
+      - ./volumes/certbot:/var/www/certbot:ro
+    networks:
+      - livekit
     restart: unless-stopped
+$nginx_depends
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: livekit-certbot
+    volumes:
+      - ./volumes/letsencrypt:/etc/letsencrypt
+      - ./volumes/certbot:/var/www/certbot
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait \$\${!}; done"
+    networks:
+      - livekit
+    restart: unless-stopped
+$redis_service
+$livekit_service
 
 networks:
   livekit:
@@ -376,7 +407,7 @@ volumes:
   certbot:
 EOF
 
-    log_success "单机 Docker Compose 配置已生成"
+    log_success "Docker Compose 配置已生成"
 }
 
 generate_docker_compose_multi() {
@@ -487,10 +518,19 @@ deploy() {
 
     check_dependencies
     init_directories
-    generate_api_keys
-    generate_livekit_config
-    generate_redis_config
     generate_nginx_config
+
+    # 如果没有配置远程 LiveKit 节点，则部署内置 LiveKit
+    if [ -z "$LIVEKIT_NODES" ]; then
+        log_info "单机模式：部署内置 LiveKit"
+        generate_api_keys
+        generate_livekit_config
+        generate_redis_config
+    else
+        log_info "集群模式：使用远程 LiveKit 节点"
+        log_info "远程 LiveKit 节点: $LIVEKIT_NODES"
+    fi
+
     generate_docker_compose
 
     log_info "启动 Docker 容器..."
@@ -500,8 +540,12 @@ deploy() {
     sleep 5
 
     log_success "部署完成！"
-    log_info "API 密钥: $LIVEKIT_API_KEY"
-    log_info "API 密钥密码: $LIVEKIT_API_SECRET"
+
+    if [ -z "$LIVEKIT_NODES" ]; then
+        log_info "API 密钥: $LIVEKIT_API_KEY"
+        log_info "API 密钥密码: $LIVEKIT_API_SECRET"
+    fi
+
     log_info "访问地址: https://$DOMAIN"
 }
 
@@ -799,29 +843,26 @@ LiveKit 统一部署脚本
   help                        显示帮助信息
 
 部署方式:
-  单机部署（2 台机器）：
-    机器 1: Nginx + 业务服务
-    机器 2: LiveKit + Redis
+  单机部署（1 台机器，内置 LiveKit）：
+    $0 deploy
+    go run 你的服务.go
 
-  分布式部署（4+ 台机器）：
-    机器 1: Nginx + 业务服务
-    机器 2, 3, 4: LiveKit + Redis
+  集群部署（多台机器，远程 LiveKit）：
+    机器 1: 本服务 + Nginx（指向远程 LiveKit）
+    机器 2, 3, 4: LiveKit 节点
 
 示例:
-  # 单机部署 - 机器 1（Nginx + 业务服务）
-  $0 deploy-nginx-service-only
+  # 单机部署（内置 LiveKit）
+  $0 deploy
   $0 init-https
   go run 你的服务.go
 
-  # 单机部署 - 机器 2（LiveKit）
-  NODES=localhost $0 deploy-livekit-only
-
-  # 分布式部署 - 机器 1（Nginx + 业务服务）
-  $0 deploy-nginx-service-only
+  # 集群部署 - 机器 1（本服务 + Nginx）
+  LIVEKIT_NODES=192.168.1.2:7880,192.168.1.3:7880,192.168.1.4:7880 $0 deploy
   $0 init-https
   go run 你的服务.go
 
-  # 分布式部署 - 机器 2, 3, 4（LiveKit）
+  # 集群部署 - 机器 2, 3, 4（LiveKit 节点）
   NODES=192.168.1.2,192.168.1.3,192.168.1.4 $0 deploy-livekit-only
 
   # 查看日志
