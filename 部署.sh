@@ -849,21 +849,28 @@ LiveKit 统一部署脚本
 
   集群部署（多台机器，远程 LiveKit）：
     机器 1: 本服务 + Nginx（指向远程 LiveKit）
-    机器 2, 3, 4: LiveKit 节点
+    机器 2: Redis（共享数据存储）
+    机器 3, 4, 5: LiveKit 节点（连接同一个 Redis）
 
 示例:
-  # 单机部署（内置 LiveKit）
+  # 单机部署（内置 LiveKit + Redis）
   $0 deploy
   $0 init-https
   go run 你的服务.go
 
   # 集群部署 - 机器 1（本服务 + Nginx）
-  LIVEKIT_NODES=192.168.1.2:7880,192.168.1.3:7880,192.168.1.4:7880 $0 deploy
+  LIVEKIT_NODES=192.168.1.3:7880,192.168.1.4:7880,192.168.1.5:7880 $0 deploy
   $0 init-https
   go run 你的服务.go
 
-  # 集群部署 - 机器 2, 3, 4（LiveKit 节点）
-  NODES=192.168.1.2,192.168.1.3,192.168.1.4 $0 deploy-livekit-only
+  # 集群部署 - 机器 2（Redis 服务器）
+  # 在 .env 中设置：REDIS_HOST=0.0.0.0 REDIS_PORT=6379
+  # 然后运行：
+  docker run -d -p 6379:6379 redis:7-alpine
+
+  # 集群部署 - 机器 3, 4, 5（LiveKit 节点）
+  # 在 .env 中设置：REDIS_HOST=192.168.1.2 REDIS_PORT=6379
+  NODES=192.168.1.3,192.168.1.4,192.168.1.5 $0 deploy-livekit-only
 
   # 查看日志
   $0 logs livekit
