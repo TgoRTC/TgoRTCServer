@@ -1,0 +1,77 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+*.iml
+
+# Build
+bin/
+dist/
+build/
+*.o
+*.a
+*.so
+
+# Dependencies
+vendor/
+node_modules/
+.npm
+
+# Test
+coverage/
+*.test
+*.out
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation
+docs/
+README.md
+*.md
+
+# Configuration
+.env
+.env.example
+.env.local
+
+# Deployment
+livekit-deployment/
+deploy.sh
+部署.sh
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+Jenkinsfile
+
+# Other
+.editorconfig
+.prettierrc
+.eslintrc
+
