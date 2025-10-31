@@ -188,21 +188,88 @@ EOF
     log_success "Redis 配置已生成"
 }
 
-generate_caddy_config() {
-    log_info "生成 Caddy 配置..."
-    
-    local config_file="${CONFIG_DIR}/Caddyfile"
-    
-    cat > "$config_file" << EOF
-$DOMAIN {
-    reverse_proxy localhost:7880 {
-        header_up X-Forwarded-For {http.request.remote}
-        header_up X-Forwarded-Proto {http.request.proto}
+generate_nginx_config() {
+    log_info "生成 Nginx 配置..."
+
+    local config_file="${CONFIG_DIR}/nginx.conf"
+
+    cat > "$config_file" << 'EOF'
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log warn;
+pid /var/run/nginx.pid;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for"';
+
+    access_log /var/log/nginx/access.log main;
+
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 65;
+    types_hash_max_size 2048;
+    client_max_body_size 20M;
+
+    # 上游服务器配置
+    upstream livekit_backend {
+        least_conn;
+        server localhost:7880 max_fails=3 fail_timeout=30s;
+    }
+
+    # HTTP 重定向到 HTTPS
+    server {
+        listen 80;
+        server_name _;
+
+        location /.well-known/acme-challenge/ {
+            root /var/www/certbot;
+        }
+
+        location / {
+            return 301 https://$host$request_uri;
+        }
+    }
+
+    # HTTPS 服务器
+    server {
+        listen 443 ssl http2;
+        server_name _;
+
+        ssl_certificate /etc/letsencrypt/live/DOMAIN/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/DOMAIN/privkey.pem;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers HIGH:!aNULL:!MD5;
+        ssl_prefer_server_ciphers on;
+
+        location / {
+            proxy_pass http://livekit_backend;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 86400;
+        }
     }
 }
 EOF
-    
-    log_success "Caddy 配置已生成"
+
+    # 替换域名占位符
+    sed -i "s|DOMAIN|$DOMAIN|g" "$config_file"
+
+    log_success "Nginx 配置已生成"
 }
 
 ################################################################################
@@ -228,21 +295,34 @@ generate_docker_compose() {
 
 generate_docker_compose_single() {
     local compose_file=$1
-    
+
     cat > "$compose_file" << 'EOF'
 version: '3.8'
 
 services:
-  caddy:
-    image: caddy:2-alpine
-    container_name: livekit-caddy
+  nginx:
+    image: nginx:alpine
+    container_name: livekit-nginx
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./config/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./volumes/caddy/data:/data
-      - ./volumes/caddy/config:/config
+      - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./volumes/letsencrypt:/etc/letsencrypt:ro
+      - ./volumes/certbot:/var/www/certbot:ro
+    networks:
+      - livekit
+    restart: unless-stopped
+    depends_on:
+      - livekit
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: livekit-certbot
+    volumes:
+      - ./volumes/letsencrypt:/etc/letsencrypt
+      - ./volumes/certbot:/var/www/certbot
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done"
     networks:
       - livekit
     restart: unless-stopped
@@ -292,31 +372,42 @@ networks:
 
 volumes:
   redis_data:
-  caddy_data:
-  caddy_config:
+  letsencrypt:
+  certbot:
 EOF
-    
+
     log_success "单机 Docker Compose 配置已生成"
 }
 
 generate_docker_compose_multi() {
     local compose_file=$1
     local num_nodes=$2
-    
+
     cat > "$compose_file" << 'EOF'
 version: '3.8'
 
 services:
-  caddy:
-    image: caddy:2-alpine
-    container_name: livekit-caddy
+  nginx:
+    image: nginx:alpine
+    container_name: livekit-nginx
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./config/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./volumes/caddy/data:/data
-      - ./volumes/caddy/config:/config
+      - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./volumes/letsencrypt:/etc/letsencrypt:ro
+      - ./volumes/certbot:/var/www/certbot:ro
+    networks:
+      - livekit
+    restart: unless-stopped
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: livekit-certbot
+    volumes:
+      - ./volumes/letsencrypt:/etc/letsencrypt
+      - ./volumes/certbot:/var/www/certbot
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done"
     networks:
       - livekit
     restart: unless-stopped
@@ -399,7 +490,7 @@ deploy() {
     generate_api_keys
     generate_livekit_config
     generate_redis_config
-    generate_caddy_config
+    generate_nginx_config
     generate_docker_compose
 
     log_info "启动 Docker 容器..."
@@ -414,30 +505,41 @@ deploy() {
     log_info "访问地址: https://$DOMAIN"
 }
 
-deploy_caddy_service_only() {
-    log_info "开始部署 Caddy + 业务服务..."
+deploy_nginx_service_only() {
+    log_info "开始部署 Nginx + 业务服务..."
 
     check_dependencies
     init_directories
-    generate_caddy_config
+    generate_nginx_config
 
-    log_info "生成 Caddy 专用的 Docker Compose..."
+    log_info "生成 Nginx 专用的 Docker Compose..."
     local compose_file="${DEPLOYMENT_DIR}/docker-compose.yml"
 
     cat > "$compose_file" << 'EOF'
 version: '3.8'
 
 services:
-  caddy:
-    image: caddy:2-alpine
-    container_name: livekit-caddy
+  nginx:
+    image: nginx:alpine
+    container_name: livekit-nginx
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./config/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./volumes/caddy/data:/data
-      - ./volumes/caddy/config:/config
+      - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./volumes/letsencrypt:/etc/letsencrypt:ro
+      - ./volumes/certbot:/var/www/certbot:ro
+    networks:
+      - livekit
+    restart: unless-stopped
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: livekit-certbot
+    volumes:
+      - ./volumes/letsencrypt:/etc/letsencrypt
+      - ./volumes/certbot:/var/www/certbot
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done"
     networks:
       - livekit
     restart: unless-stopped
@@ -447,49 +549,60 @@ networks:
     driver: bridge
 
 volumes:
-  caddy_data:
-  caddy_config:
+  letsencrypt:
+  certbot:
 EOF
 
-    log_info "启动 Caddy 容器..."
+    log_info "启动 Nginx 容器..."
     cd "$DEPLOYMENT_DIR"
     docker-compose up -d
 
     sleep 5
 
-    log_success "Caddy 部署完成！"
+    log_success "Nginx 部署完成！"
     log_info "访问地址: https://$DOMAIN"
     log_info ""
     log_info "下一步："
     log_info "1. 在这台机器上部署你的业务服务"
     log_info "2. 确保业务服务监听在 localhost:8080"
-    log_info "3. 更新 Caddyfile 中的反向代理配置"
+    log_info "3. 运行 certbot 申请 HTTPS 证书"
 }
 
-deploy_caddy_only() {
-    log_info "开始部署 Caddy 反向代理..."
+deploy_nginx_only() {
+    log_info "开始部署 Nginx 反向代理..."
 
     check_dependencies
     init_directories
-    generate_caddy_config
+    generate_nginx_config
 
-    log_info "生成 Caddy 专用的 Docker Compose..."
+    log_info "生成 Nginx 专用的 Docker Compose..."
     local compose_file="${DEPLOYMENT_DIR}/docker-compose.yml"
 
     cat > "$compose_file" << 'EOF'
 version: '3.8'
 
 services:
-  caddy:
-    image: caddy:2-alpine
-    container_name: livekit-caddy
+  nginx:
+    image: nginx:alpine
+    container_name: livekit-nginx
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./config/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./volumes/caddy/data:/data
-      - ./volumes/caddy/config:/config
+      - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./volumes/letsencrypt:/etc/letsencrypt:ro
+      - ./volumes/certbot:/var/www/certbot:ro
+    networks:
+      - livekit
+    restart: unless-stopped
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: livekit-certbot
+    volumes:
+      - ./volumes/letsencrypt:/etc/letsencrypt
+      - ./volumes/certbot:/var/www/certbot
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done"
     networks:
       - livekit
     restart: unless-stopped
@@ -499,17 +612,17 @@ networks:
     driver: bridge
 
 volumes:
-  caddy_data:
-  caddy_config:
+  letsencrypt:
+  certbot:
 EOF
 
-    log_info "启动 Caddy 容器..."
+    log_info "启动 Nginx 容器..."
     cd "$DEPLOYMENT_DIR"
     docker-compose up -d
 
     sleep 5
 
-    log_success "Caddy 部署完成！"
+    log_success "Nginx 部署完成！"
     log_info "访问地址: https://$DOMAIN"
 }
 
@@ -537,6 +650,37 @@ deploy_livekit_only() {
 ################################################################################
 # 管理函数
 ################################################################################
+
+init_https_cert() {
+    log_info "初始化 HTTPS 证书..."
+
+    cd "$DEPLOYMENT_DIR"
+
+    # 创建临时 nginx 配置用于证书申请
+    mkdir -p ./volumes/certbot
+
+    # 启动 nginx 和 certbot
+    docker-compose up -d nginx certbot
+
+    sleep 5
+
+    # 申请证书
+    log_info "申请 Let's Encrypt 证书..."
+    docker-compose exec -T certbot certbot certonly --webroot -w /var/www/certbot \
+        -d "$DOMAIN" \
+        --email admin@"$DOMAIN" \
+        --agree-tos \
+        --non-interactive \
+        --quiet
+
+    if [ $? -eq 0 ]; then
+        log_success "HTTPS 证书申请成功"
+        log_info "证书位置: ./volumes/letsencrypt/live/$DOMAIN/"
+    else
+        log_error "HTTPS 证书申请失败，请检查域名和网络配置"
+        return 1
+    fi
+}
 
 start_services() {
     log_info "启动服务..."
@@ -656,23 +800,25 @@ LiveKit 统一部署脚本
 
 部署方式:
   单机部署（2 台机器）：
-    机器 1: Caddy + 业务服务
+    机器 1: Nginx + 业务服务
     机器 2: LiveKit + Redis
 
   分布式部署（4+ 台机器）：
-    机器 1: Caddy + 业务服务
+    机器 1: Nginx + 业务服务
     机器 2, 3, 4: LiveKit + Redis
 
 示例:
-  # 单机部署 - 机器 1（Caddy + 业务服务）
-  $0 deploy-caddy-service-only
+  # 单机部署 - 机器 1（Nginx + 业务服务）
+  $0 deploy-nginx-service-only
+  $0 init-https
   go run 你的服务.go
 
   # 单机部署 - 机器 2（LiveKit）
   NODES=localhost $0 deploy-livekit-only
 
-  # 分布式部署 - 机器 1（Caddy + 业务服务）
-  $0 deploy-caddy-service-only
+  # 分布式部署 - 机器 1（Nginx + 业务服务）
+  $0 deploy-nginx-service-only
+  $0 init-https
   go run 你的服务.go
 
   # 分布式部署 - 机器 2, 3, 4（LiveKit）
@@ -704,14 +850,23 @@ main() {
         deploy)
             deploy
             ;;
+        deploy-nginx-service-only)
+            deploy_nginx_service_only
+            ;;
+        deploy-nginx-only)
+            deploy_nginx_only
+            ;;
         deploy-caddy-service-only)
-            deploy_caddy_service_only
+            deploy_nginx_service_only
             ;;
         deploy-caddy-only)
-            deploy_caddy_only
+            deploy_nginx_only
             ;;
         deploy-livekit-only)
             deploy_livekit_only
+            ;;
+        init-https)
+            init_https_cert
             ;;
         start)
             start_services

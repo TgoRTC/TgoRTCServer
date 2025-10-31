@@ -20,8 +20,12 @@ const docTemplate = `{
       "description": "本地开发环境"
     },
     {
-      "url": "https://api.example.com",
-      "description": "生产环境"
+      "url": "https://livekit.example.com",
+      "description": "生产环境（通过 Caddy 反向代理）"
+    },
+    {
+      "url": "http://livekit.example.com",
+      "description": "生产环境（HTTP）"
     }
   ],
   "tags": [
@@ -239,9 +243,9 @@ const docTemplate = `{
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
 	Version:          "1.0.0",
-	Host:             "localhost:8080",
+	Host:             "livekit.example.com",
 	BasePath:         "/api/v1",
-	Schemes:          []string{},
+	Schemes:          []string{"https", "http"},
 	Title:            "TgoCall Server API",
 	Description:      "基于 LiveKit 的音视频服务 API",
 	InfoInstanceName: "swagger",

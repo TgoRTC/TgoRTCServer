@@ -19,7 +19,8 @@ import (
 // @description 基于 LiveKit 的音视频服务 API
 // @contact.name API Support
 // @contact.url https://github.com/TgoRTC/TgoCallServer
-// @host localhost:8080
+// @host livekit.example.com
+// @schemes https http
 // @BasePath /api/v1
 // @securityDefinitions.apikey BearerAuth
 // @in header
