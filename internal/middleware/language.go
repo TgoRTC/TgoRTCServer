@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"github.com/gin-gonic/gin"
-	"tgo-call-server/internal/i18n"
+	"tgo-rtc-server/internal/i18n"
 )
 
 // LanguageMiddleware 语言中间件

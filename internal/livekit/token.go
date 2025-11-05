@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"tgo-call-server/internal/config"
+	"tgo-rtc-server/internal/config"
 
 	"github.com/livekit/protocol/auth"
 )

@@ -48,15 +48,15 @@ EOF
 
 ### 步骤 4: 构建并测试
 ```bash
-go build -o tgo-call-server
-./tgo-call-server &
+go build -o tgo-rtc-server
+./tgo-rtc-server &
 sleep 3
 
 # 验证
 curl -s http://localhost:8080/swagger/index.html | head -20
 
 # 停止
-pkill -f tgo-call-server
+pkill -f tgo-rtc-server
 ```
 
 ---
@@ -144,8 +144,8 @@ responses:
 - [ ] `docs/swagger.yaml` 语法正确
 - [ ] `docs/swagger.json` 格式有效
 - [ ] `docs/docs.go` 已更新
-- [ ] 项目构建成功：`go build -o tgo-call-server`
-- [ ] 服务启动正常：`./tgo-call-server`
+- [ ] 项目构建成功：`go build -o tgo-rtc-server`
+- [ ] 服务启动正常：`./tgo-rtc-server`
 - [ ] Swagger UI 可访问：`http://localhost:8080/swagger/index.html`
 - [ ] 所有 API 端点都显示了
 - [ ] 参数和响应定义正确
@@ -183,14 +183,14 @@ python3 -m json.tool docs/swagger.json
 **解决方案：**
 ```bash
 # 检查服务是否运行
-ps aux | grep tgo-call-server
+ps aux | grep tgo-rtc-server
 
 # 重新构建
-go build -o tgo-call-server
+go build -o tgo-rtc-server
 
 # 重启服务
-pkill -f tgo-call-server
-./tgo-call-server
+pkill -f tgo-rtc-server
+./tgo-rtc-server
 ```
 
 ---

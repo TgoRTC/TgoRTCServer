@@ -8,14 +8,14 @@ version: '3.8'
 
 services:
   # ============================================================================
-  # 业务服务（TgoCallServer）
+  # 业务服务（TgoRTCServer）
   # ============================================================================
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    image: tgo-call-server:latest
-    container_name: tgo-call-server
+    image: tgo-rtc-server:latest
+    container_name: tgo-rtc-server
     ports:
       - "8080:8080"
     environment:

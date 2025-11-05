@@ -49,7 +49,7 @@ sudo usermod -aG docker $USER
 ```bash
 # 克隆项目
 git clone <your-repo>
-cd TgoCallServer
+cd TgoRTCServer
 
 # 复制环境配置
 cp .env.example .env
@@ -122,7 +122,7 @@ curl -X GET https://livekit.example.com/api/v1/rooms \
 ```
 ┌─────────────────────────────────────────┐
 │  机器 1（本服务 + Nginx）               │
-│  - TgoCallServer（业务服务）            │
+│  - TgoRTCServer（业务服务）            │
 │  - Nginx（反向代理 + 负载均衡）         │
 │  - Certbot（HTTPS 证书）                │
 └─────────────────────────────────────────┘

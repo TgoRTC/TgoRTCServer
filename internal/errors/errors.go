@@ -2,7 +2,7 @@ package errors
 
 import (
 	"fmt"
-	"tgo-call-server/internal/i18n"
+	"tgo-rtc-server/internal/i18n"
 )
 
 // BusinessError 业务错误（返回 400）

@@ -149,7 +149,7 @@ EOF
 {
   "openapi": "3.0.0",
   "info": {
-    "title": "TgoCall Server API",
+    "title": "TgoRTC Server API",
     "version": "1.0.0"
   },
   "paths": {
@@ -247,7 +247,7 @@ var SwaggerInfo = &swag.Spec{
 	Host:             "localhost:8080",
 	BasePath:         "/api/v1",
 	Schemes:          []string{},
-	Title:            "TgoCall Server API",
+	Title:            "TgoRTC Server API",
 	Description:      "基于 LiveKit 的音视频服务 API",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
@@ -309,8 +309,8 @@ chmod +x update-swagger-docs.sh
 
 4. **构建并测试**
    ```bash
-   go build -o tgo-call-server
-   ./tgo-call-server
+   go build -o tgo-rtc-server
+   ./tgo-rtc-server
    # 访问 http://localhost:8080/swagger/index.html
    ```
 
@@ -397,14 +397,14 @@ jq empty docs/swagger.json && echo "✅ JSON 格式正确"
 ### 验证 3: 构建项目
 
 ```bash
-go build -o tgo-call-server
+go build -o tgo-rtc-server
 # 如果构建成功，说明 docs.go 格式正确
 ```
 
 ### 验证 4: 启动服务并访问 Swagger UI
 
 ```bash
-./tgo-call-server &
+./tgo-rtc-server &
 sleep 3
 
 # 检查 Swagger UI 是否可访问
@@ -414,12 +414,12 @@ curl -s http://localhost:8080/swagger/index.html | head -20
 curl -s http://localhost:8080/api/docs/swagger.json | jq '.paths | keys'
 
 # 停止服务
-pkill -f tgo-call-server
+pkill -f tgo-rtc-server
 ```
 
 ### 验证 5: 在浏览器中查看
 
-1. 启动服务：`./tgo-call-server`
+1. 启动服务：`./tgo-rtc-server`
 2. 打开浏览器：`http://localhost:8080/swagger/index.html`
 3. 检查所有 API 端点是否都显示了
 4. 尝试展开某个端点，查看参数和响应
@@ -435,14 +435,14 @@ pkill -f tgo-call-server
 **解决方案：**
 ```bash
 # 检查服务是否运行
-ps aux | grep tgo-call-server
+ps aux | grep tgo-rtc-server
 
 # 检查路由配置
 grep -n "swagger" internal/router/router.go
 
 # 重新构建
-go build -o tgo-call-server
-./tgo-call-server
+go build -o tgo-rtc-server
+./tgo-rtc-server
 ```
 
 ---
@@ -519,17 +519,17 @@ python3 -m json.tool docs/swagger.json > /dev/null
 ./update-swagger-docs.sh
 
 # 6. 构建项目
-go build -o tgo-call-server
+go build -o tgo-rtc-server
 
 # 7. 启动服务测试
-./tgo-call-server &
+./tgo-rtc-server &
 sleep 3
 
 # 8. 验证 Swagger UI
 curl -s http://localhost:8080/swagger/index.html | head -20
 
 # 9. 停止服务
-pkill -f tgo-call-server
+pkill -f tgo-rtc-server
 
 # 10. 提交代码
 git add docs/

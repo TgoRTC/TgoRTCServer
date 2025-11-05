@@ -1,5 +1,5 @@
 # 多阶段构建：编译阶段
-FROM golang:1.21-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 # 安装依赖
 RUN apk add --no-cache git make
@@ -23,7 +23,7 @@ RUN go install github.com/swaggo/swag/cmd/swag@latest && \
 # 编译应用
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags="-w -s" \
-    -o tgo-call-server \
+    -o tgo-rtc-server \
     main.go
 
 # ============================================================================
@@ -31,8 +31,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
 # ============================================================================
 FROM alpine:latest
 
-# 安装运行时依赖
-RUN apk add --no-cache ca-certificates tzdata
+# 安装运行时依赖（包含 wget/curl 供健康检查使用）
+RUN apk add --no-cache ca-certificates tzdata wget curl
 
 # 创建非 root 用户
 RUN addgroup -g 1000 appuser && \
@@ -42,7 +42,7 @@ RUN addgroup -g 1000 appuser && \
 WORKDIR /app
 
 # 从构建阶段复制二进制文件
-COPY --from=builder /app/tgo-call-server .
+COPY --from=builder /app/tgo-rtc-server .
 COPY --from=builder /app/docs ./docs
 
 # 设置权限
@@ -59,5 +59,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD wget --quiet --tries=1 --spider http://localhost:8080/health || exit 1
 
 # 启动应用
-CMD ["./tgo-call-server"]
+CMD ["./tgo-rtc-server"]
 

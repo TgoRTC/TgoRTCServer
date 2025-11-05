@@ -72,10 +72,10 @@ migrations/
 
 ```sql
 -- Migration 20251028-01: Add new column
--- Description: 为 call_room 表添加新字段
+-- Description: 为 rtc_room 表添加新字段
 -- Created: 2025-10-28
 
-ALTER TABLE call_room ADD COLUMN new_column VARCHAR(100) DEFAULT '' COMMENT '新字段';
+ALTER TABLE rtc_room ADD COLUMN new_column VARCHAR(100) DEFAULT '' COMMENT '新字段';
 ```
 
 **注意：**
@@ -106,13 +106,13 @@ ALTER TABLE call_room ADD COLUMN new_column VARCHAR(100) DEFAULT '' COMMENT '新
 
 ```bash
 # 查看所有迁移记录
-mysql -u root tgo_call -e "SELECT version, name, status, executed_at FROM migrations;"
+mysql -u root tgo_rtc -e "SELECT version, name, status, executed_at FROM migrations;"
 
 # 查看失败的迁移
-mysql -u root tgo_call -e "SELECT * FROM migrations WHERE status = 'failed';"
+mysql -u root tgo_rtc -e "SELECT * FROM migrations WHERE status = 'failed';"
 
 # 查看迁移统计
-mysql -u root tgo_call -e "SELECT status, COUNT(*) as count FROM migrations GROUP BY status;"
+mysql -u root tgo_rtc -e "SELECT status, COUNT(*) as count FROM migrations GROUP BY status;"
 ```
 
 ## 常见问题

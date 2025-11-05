@@ -18,7 +18,7 @@ type Participant struct {
 
 // TableName 指定表名
 func (Participant) TableName() string {
-	return "call_participant"
+	return "rtc_participant"
 }
 
 // ParticipantStatus 参与者状态常量

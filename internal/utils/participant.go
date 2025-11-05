@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"tgo-call-server/internal/models"
+	"tgo-rtc-server/internal/models"
 )
 
 // ParticipantDeduplicator 参与者去重工具

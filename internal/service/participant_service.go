@@ -3,11 +3,11 @@ package service
 import (
 	"time"
 
-	"tgo-call-server/internal/errors"
-	"tgo-call-server/internal/i18n"
-	"tgo-call-server/internal/livekit"
-	"tgo-call-server/internal/models"
-	"tgo-call-server/internal/utils"
+	"tgo-rtc-server/internal/errors"
+	"tgo-rtc-server/internal/i18n"
+	"tgo-rtc-server/internal/livekit"
+	"tgo-rtc-server/internal/models"
+	"tgo-rtc-server/internal/utils"
 
 	"gorm.io/gorm"
 )

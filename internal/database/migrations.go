@@ -90,7 +90,7 @@ func LoadMigrations() ([]MigrationScript, error) {
 // parseMigrationFileName 解析迁移文件名
 // 支持两种格式:
 // 1. 日期+序号格式: 20251027-01.sql (推荐)
-// 2. 版本号+描述格式: 001_create_call_room_table.sql (兼容)
+// 2. 版本号+描述格式: 001_create_rtc_room_table.sql (兼容)
 func parseMigrationFileName(filename string) (version, name string) {
 	// 移除 .sql 扩展名
 	nameWithoutExt := strings.TrimSuffix(filename, ".sql")
@@ -105,7 +105,7 @@ func parseMigrationFileName(filename string) (version, name string) {
 		return version, name
 	}
 
-	// 尝试匹配版本号+描述格式: 001_create_call_room_table
+	// 尝试匹配版本号+描述格式: 001_create_rtc_room_table
 	versionDescRe := regexp.MustCompile(`^(\d+)_(.+)$`)
 	if matches := versionDescRe.FindStringSubmatch(nameWithoutExt); len(matches) == 3 {
 		version = matches[1]

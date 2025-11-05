@@ -4,8 +4,8 @@ import (
 	"log"
 	"time"
 
-	"tgo-call-server/internal/config"
-	"tgo-call-server/internal/models"
+	"tgo-rtc-server/internal/config"
+	"tgo-rtc-server/internal/models"
 
 	"gorm.io/gorm"
 )

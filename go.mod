@@ -1,4 +1,4 @@
-module tgo-call-server
+module tgo-rtc-server
 
 go 1.23.0
 

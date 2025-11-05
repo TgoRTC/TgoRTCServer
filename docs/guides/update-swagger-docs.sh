@@ -114,7 +114,7 @@ var SwaggerInfo = &swag.Spec{
 	Host:             "localhost:8080",
 	BasePath:         "/api/v1",
 	Schemes:          []string{},
-	Title:            "TgoCall Server API",
+	Title:            "TgoRTC Server API",
 	Description:      "基于 LiveKit 的音视频服务 API",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
@@ -132,7 +132,7 @@ echo -e "${GREEN}✅ docs.go 已更新${NC}"
 echo ""
 echo -e "${YELLOW}📝 步骤 5: 构建项目${NC}"
 
-if go build -o tgo-call-server 2>&1; then
+if go build -o tgo-rtc-server 2>&1; then
     echo -e "${GREEN}✅ 构建成功${NC}"
 else
     echo -e "${RED}❌ 构建失败${NC}"
@@ -149,7 +149,7 @@ echo "  - docs/docs.go: 已更新"
 echo "  - 项目: 已构建"
 echo ""
 echo "🚀 启动服务:"
-echo "  ./tgo-call-server"
+echo "  ./tgo-rtc-server"
 echo ""
 echo "📖 访问 Swagger UI:"
 echo "  http://localhost:8080/swagger/index.html"

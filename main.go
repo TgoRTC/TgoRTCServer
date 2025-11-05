@@ -3,22 +3,22 @@ package main
 import (
 	"log"
 
-	"tgo-call-server/internal/config"
-	"tgo-call-server/internal/database"
-	"tgo-call-server/internal/router"
-	"tgo-call-server/internal/service"
-	"tgo-call-server/internal/utils"
+	"tgo-rtc-server/internal/config"
+	"tgo-rtc-server/internal/database"
+	"tgo-rtc-server/internal/router"
+	"tgo-rtc-server/internal/service"
+	"tgo-rtc-server/internal/utils"
 
 	"github.com/joho/godotenv"
 
-	_ "tgo-call-server/docs"
+	_ "tgo-rtc-server/docs"
 )
 
-// @title TgoCall Server API
+// @title TgoRTC Server API
 // @version 1.0.0
 // @description 基于 LiveKit 的音视频服务 API
 // @contact.name API Support
-// @contact.url https://github.com/TgoRTC/TgoCallServer
+// @contact.url https://github.com/TgoRTC/TgoRTCServer
 // @host livekit.example.com
 // @schemes https http
 // @BasePath /api/v1

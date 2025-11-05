@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"tgo-call-server/internal/config"
+	"tgo-rtc-server/internal/config"
 )
 
 // InitRedis 初始化 Redis 连接

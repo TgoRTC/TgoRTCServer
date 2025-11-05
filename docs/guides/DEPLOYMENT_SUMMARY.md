@@ -1,6 +1,6 @@
 # Docker Compose 部署文件总结
 
-本文档总结了为 TgoCallServer 项目创建的所有 Docker Compose 部署文件。
+本文档总结了为 TgoRTCServer 项目创建的所有 Docker Compose 部署文件。
 
 ## 📦 创建的文件清单
 
@@ -23,7 +23,7 @@
 #### `docker-compose.prod.yml`
 - **用途**：生产环境完整配置
 - **包含服务**：
-  - 业务服务（TgoCallServer）
+  - 业务服务（TgoRTCServer）
   - Nginx、Certbot、Redis、LiveKit
 - **特点**：
   - 包含业务服务容器

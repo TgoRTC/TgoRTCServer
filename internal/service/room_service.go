@@ -2,11 +2,11 @@ package service
 
 import (
 	"strings"
-	"tgo-call-server/internal/errors"
-	"tgo-call-server/internal/i18n"
-	"tgo-call-server/internal/livekit"
-	"tgo-call-server/internal/models"
-	"tgo-call-server/internal/utils"
+	"tgo-rtc-server/internal/errors"
+	"tgo-rtc-server/internal/i18n"
+	"tgo-rtc-server/internal/livekit"
+	"tgo-rtc-server/internal/models"
+	"tgo-rtc-server/internal/utils"
 	"time"
 
 	"github.com/google/uuid"
@@ -57,7 +57,7 @@ func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.Create
 		return nil, errors.NewBusinessErrorWithKey(i18n.RoomQueryFailed, err.Error())
 	}
 
-	// 4. 检查 creator 是否在 call_participant 表存在 status=0/1 的情况
+	// 4. 检查 creator 是否在 rtc_participant 表存在 status=0/1 的情况
 	var participant models.Participant
 	if err := rs.db.Where("uid = ? AND (status = ? OR status = ?)",
 		req.Creator, models.ParticipantStatusInviting, models.ParticipantStatusJoined).
@@ -97,7 +97,7 @@ func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.Create
 			SourceChannelType: int16(req.SourceChannelType),
 			Creator:           req.Creator,
 			RoomID:            roomID,
-			CallType:          int16(req.CallType),
+			RTCType:           int16(req.RTCType),
 			InviteOn:          int16(req.InviteOn),
 			Status:            models.RoomStatusNotStarted,
 			MaxParticipants:   maxParticipants,

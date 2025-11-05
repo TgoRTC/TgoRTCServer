@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"tgo-call-server/internal/models"
-	"tgo-call-server/internal/utils"
+	"tgo-rtc-server/internal/models"
+	"tgo-rtc-server/internal/utils"
 
 	"github.com/go-redis/redis/v8"
 	"go.uber.org/zap"
@@ -152,7 +152,7 @@ func (ws *WebhookService) handleRoomStarted(event *models.WebhookEvent) error {
 		eventData := &models.RoomEventData{
 			RoomID:          room.RoomID,
 			Creator:         room.Creator,
-			CallType:        int(room.CallType),
+			RTCType:         int(room.RTCType),
 			InviteOn:        int(room.InviteOn),
 			Status:          int(models.RoomStatusInProgress),
 			MaxParticipants: room.MaxParticipants,
@@ -226,7 +226,7 @@ func (ws *WebhookService) handleRoomFinished(event *models.WebhookEvent) error {
 		eventData := &models.RoomEventData{
 			RoomID:          room.RoomID,
 			Creator:         room.Creator,
-			CallType:        int(room.CallType),
+			RTCType:         int(room.RTCType),
 			InviteOn:        int(room.InviteOn),
 			Status:          int(models.RoomStatusFinished),
 			MaxParticipants: room.MaxParticipants,
@@ -260,7 +260,7 @@ func (ws *WebhookService) handleParticipantJoined(event *models.WebhookEvent) er
 		zap.String("room_name", event.Room.Name),
 	)
 
-	// 1、判断参与者是否在 call_participant 表存在
+	// 1、判断参与者是否在 rtc_participant 表存在
 	var participant models.Participant
 	if err := ws.db.Where("room_id = ? AND uid = ?", event.Room.Name, event.Participant.Identity).First(&participant).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {

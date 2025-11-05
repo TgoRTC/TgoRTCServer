@@ -1,8 +1,8 @@
--- Migration 20251027-02: Create call_participant table
+-- Migration 20251027-02: Create rtc_participant table
 -- Description: 创建参与者表，用于存储房间参与者信息
 -- Created: 2025-10-27
 
-CREATE TABLE IF NOT EXISTS call_participant (
+CREATE TABLE IF NOT EXISTS rtc_participant (
     id INT AUTO_INCREMENT PRIMARY KEY COMMENT '参与者ID',
     room_id VARCHAR(40) NOT NULL DEFAULT '' COMMENT '房间ID',
     uid VARCHAR(40) NOT NULL DEFAULT '' COMMENT '用户ID',

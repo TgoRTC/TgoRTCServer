@@ -3,8 +3,8 @@ package service
 import (
 	"time"
 
-	"tgo-call-server/internal/config"
-	"tgo-call-server/internal/utils"
+	"tgo-rtc-server/internal/config"
+	"tgo-rtc-server/internal/utils"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"

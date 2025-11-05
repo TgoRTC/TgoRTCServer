@@ -3,8 +3,8 @@ package handler
 import (
 	"net/http"
 
-	"tgo-call-server/internal/service"
-	"tgo-call-server/internal/utils"
+	"tgo-rtc-server/internal/service"
+	"tgo-rtc-server/internal/utils"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"

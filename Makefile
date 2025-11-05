@@ -15,7 +15,7 @@ NC := \033[0m
 # ============================================================================
 
 help: ## 显示帮助信息
-	@echo "$(BLUE)TgoCallServer - Docker Compose 部署工具$(NC)"
+	@echo "$(BLUE)TgoRTC Server - Docker Compose 部署工具$(NC)"
 	@echo ""
 	@echo "$(YELLOW)开发环境命令:$(NC)"
 	@echo "  make build              构建应用"
@@ -37,6 +37,7 @@ help: ## 显示帮助信息
 	@echo "  make verify             验证部署"
 	@echo "  make restart            重启服务"
 	@echo "  make ps                 查看容器状态"
+	@echo "  make e2e-local          本地端到端测试（自动启动/验证接口）"
 	@echo ""
 
 # ============================================================================
@@ -45,7 +46,7 @@ help: ## 显示帮助信息
 
 build: ## 构建应用
 	@echo "$(BLUE)构建应用...$(NC)"
-	go build -o tgo-call-server main.go
+	go build -o tgo-rtc-server main.go
 	@echo "$(GREEN)✓ 构建完成$(NC)"
 
 run: ## 运行应用
@@ -54,7 +55,7 @@ run: ## 运行应用
 
 stop: ## 停止应用
 	@echo "$(BLUE)停止应用...$(NC)"
-	pkill -f tgo-call-server || true
+	pkill -f tgo-rtc-server || true
 	@echo "$(GREEN)✓ 应用已停止$(NC)"
 
 logs: ## 查看日志
@@ -63,7 +64,7 @@ logs: ## 查看日志
 
 clean: ## 清理构建文件
 	@echo "$(BLUE)清理构建文件...$(NC)"
-	rm -f tgo-call-server
+	rm -f tgo-rtc-server
 	rm -rf dist/ bin/
 	go clean
 	@echo "$(GREEN)✓ 清理完成$(NC)"
@@ -211,4 +212,14 @@ version: ## 显示版本信息
 	@echo "Go: $$(go version | awk '{print $$3}')"
 	@echo "Docker: $$(docker --version | awk '{print $$3}')"
 	@echo "Docker Compose: $$(docker-compose --version | awk '{print $$3}')"
+
+# ============================================================================
+# 端到端测试
+# ============================================================================
+.PHONY: e2e-local
+
+e2e-local: ## 本地端到端测试（自动启动/验证接口）
+		@echo "$(BLUE)执行本地 E2E 测试...$(NC)"
+		bash scripts/e2e_local.sh || true
+		@echo "$(GREEN)✓ E2E 脚本已执行，查看 test-output 目录获取详细结果$(NC)"
 

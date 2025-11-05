@@ -11,7 +11,7 @@ const docTemplate = `{
     "version": "{{.Version}}",
     "contact": {
       "name": "API Support",
-      "url": "https://github.com/TgoRTC/TgoCallServer"
+      "url": "https://github.com/TgoRTC/TgoRTCServer"
     }
   },
   "servers": [
@@ -60,7 +60,7 @@ const docTemplate = `{
                   "source_channel_type": {"type": "integer", "example": 0},
                   "creator": {"type": "string", "example": "user_001"},
                   "room_id": {"type": "string", "example": "room_abc123"},
-                  "call_type": {"type": "integer", "example": 1},
+                  "rtc_type": {"type": "integer", "example": 1},
                   "invite_on": {"type": "integer", "example": 1},
                   "max_participants": {"type": "integer", "example": 2},
                   "uids": {"type": "array", "items": {"type": "string"}, "example": ["user_002", "user_003"]}
@@ -70,7 +70,7 @@ const docTemplate = `{
           }
         },
         "responses": {
-          "201": {
+          "200": {
             "description": "房间创建成功",
             "content": {
               "application/json": {
@@ -184,7 +184,24 @@ const docTemplate = `{
           }
         },
         "responses": {
-          "200": {"description": "查询成功"},
+          "200": {
+            "description": "查询成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "room_id": {"type": "string", "description": "房间 ID"},
+                      "uid": {"type": "string", "description": "用户 ID"},
+                      "status": {"type": "integer", "description": "参与者状态（0: 邀请中, 1: 已加入, 2: 已拒绝, 3: 已挂断, 4: 超时, 5: 未接听, 6: 已取消）"}
+                    }
+                  }
+                }
+              }
+            }
+          },
           "400": {"description": "请求参数错误"}
         }
       }
@@ -246,7 +263,7 @@ var SwaggerInfo = &swag.Spec{
 	Host:             "livekit.example.com",
 	BasePath:         "/api/v1",
 	Schemes:          []string{"https", "http"},
-	Title:            "TgoCall Server API",
+	Title:            "TgoRTC Server API",
 	Description:      "基于 LiveKit 的音视频服务 API",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,

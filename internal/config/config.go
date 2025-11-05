@@ -119,7 +119,7 @@ func LoadConfig() *Config {
 		DBPort:     getEnv("DB_PORT", "3306"),
 		DBUser:     getEnv("DB_USER", "root"),
 		DBPassword: getEnv("DB_PASSWORD", ""),
-		DBName:     getEnv("DB_NAME", "tgo_call"),
+		DBName:     getEnv("DB_NAME", "tgo_rtc"),
 
 		// Redis 配置
 		RedisHost:     getEnv("REDIS_HOST", "localhost"),

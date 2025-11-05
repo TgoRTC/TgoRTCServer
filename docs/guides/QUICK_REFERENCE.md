@@ -182,7 +182,7 @@ livekit-deployment/
 4. **定期备份**
    ```bash
    # 每天自动备份
-   0 2 * * * cd /path/to/TgoCallServer && ./部署.sh backup
+   0 2 * * * cd /path/to/TgoRTCServer && ./部署.sh backup
    ```
 
 ---

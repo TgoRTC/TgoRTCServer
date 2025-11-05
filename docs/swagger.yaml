@@ -1,19 +1,11 @@
 openapi: 3.0.0
 info:
-  title: TgoCall Server API
+  title: TgoRTC Server API
   description: 基于 LiveKit 的音视频服务 API
   version: 1.0.0
   contact:
     name: API Support
-    url: https://github.com/TgoRTC/TgoCallServer
-
-servers:
-  - url: http://localhost:8080
-    description: 本地开发环境
-  - url: https://livekit.example.com
-    description: 生产环境（通过 Caddy 反向代理）
-  - url: http://livekit.example.com
-    description: 生产环境（HTTP）
+    url: https://github.com/TgoRTC/TgoRTCServer
 
 tags:
   - name: 房间管理
@@ -37,7 +29,7 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateRoomRequest'
       responses:
-        '201':
+        '200':
           description: 房间创建成功
           content:
             application/json:
@@ -191,7 +183,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CheckUserCallStatusResponse'
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserCallStatus'
         '400':
           description: 请求参数错误
           content:
@@ -307,7 +301,7 @@ components:
           type: string
           description: 房间 ID（可选，不传则自动生成）
           example: "room_abc123"
-        call_type:
+        rtc_type:
           type: integer
           description: "呼叫类型（0: 语音, 1: 视频）"
           example: 1
@@ -441,20 +435,6 @@ components:
             type: string
           description: 要查询的用户 ID 列表
           example: ["user_001", "user_002"]
-
-    CheckUserCallStatusResponse:
-      type: object
-      properties:
-        code:
-          type: integer
-          example: 200
-        msg:
-          type: string
-          example: "ok"
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/UserCallStatus'
 
     UserCallStatus:
       type: object

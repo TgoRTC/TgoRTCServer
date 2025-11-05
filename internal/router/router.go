@@ -1,11 +1,11 @@
 package router
 
 import (
-	"tgo-call-server/internal/config"
-	"tgo-call-server/internal/handler"
-	"tgo-call-server/internal/livekit"
-	"tgo-call-server/internal/middleware"
-	"tgo-call-server/internal/service"
+	"tgo-rtc-server/internal/config"
+	"tgo-rtc-server/internal/handler"
+	"tgo-rtc-server/internal/livekit"
+	"tgo-rtc-server/internal/middleware"
+	"tgo-rtc-server/internal/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"

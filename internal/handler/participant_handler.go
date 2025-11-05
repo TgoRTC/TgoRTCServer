@@ -4,12 +4,12 @@ import (
 	"net/http"
 	"time"
 
-	"tgo-call-server/internal/errors"
-	"tgo-call-server/internal/i18n"
-	"tgo-call-server/internal/middleware"
-	"tgo-call-server/internal/models"
-	"tgo-call-server/internal/service"
-	"tgo-call-server/internal/utils"
+	"tgo-rtc-server/internal/errors"
+	"tgo-rtc-server/internal/i18n"
+	"tgo-rtc-server/internal/middleware"
+	"tgo-rtc-server/internal/models"
+	"tgo-rtc-server/internal/service"
+	"tgo-rtc-server/internal/utils"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -154,7 +154,7 @@ func (ph *ParticipantHandler) LeaveRoom(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusNoContent, nil)
+	c.JSON(http.StatusOK, nil)
 }
 
 // InviteParticipants 邀请参与者
@@ -208,7 +208,7 @@ func (ph *ParticipantHandler) InviteParticipants(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusNoContent, nil)
+	c.JSON(http.StatusOK, nil)
 }
 
 // CheckUserCallStatus 查询正在通话的成员
@@ -248,7 +248,6 @@ func (ph *ParticipantHandler) CheckUserCallStatus(c *gin.Context) {
 		data = []models.UserCallStatus{}
 	}
 
-	c.JSON(http.StatusOK, models.CheckUserCallStatusResponse{
-		Data: data,
-	})
+	// 直接返回数组，不包装在 data 节点中
+	c.JSON(http.StatusOK, data)
 }
