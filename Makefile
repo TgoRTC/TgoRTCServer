@@ -1,4 +1,11 @@
-.PHONY: help build run stop logs clean deploy deploy-prod init-https backup restore verify
+.PHONY: help build run stop logs clean deploy deploy-prod init-https backup restore verify docker-build docker-push
+
+# 镜像配置（修改为你的镜像仓库地址）
+REGISTRY := crpi-4ja8peh93d2yb8c8.cn-shanghai.personal.cr.aliyuncs.com
+NAMESPACE := slun
+IMAGE_NAME := tgortc
+TAG := latest
+FULL_IMAGE := $(REGISTRY)/$(NAMESPACE)/$(IMAGE_NAME):$(TAG)
 
 # 颜色定义
 BLUE := \033[0;34m
@@ -16,6 +23,11 @@ NC := \033[0m
 
 help: ## 显示帮助信息
 	@echo "$(BLUE)TgoRTC Server - Docker Compose 部署工具$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Docker 镜像命令:$(NC)"
+	@echo "  make docker-build       构建 Docker 镜像"
+	@echo "  make docker-push        推送 Docker 镜像"
+	@echo "  make docker-deploy      构建并推送镜像（一键部署）"
 	@echo ""
 	@echo "$(YELLOW)开发环境命令:$(NC)"
 	@echo "  make build              构建应用"
@@ -39,6 +51,23 @@ help: ## 显示帮助信息
 	@echo "  make ps                 查看容器状态"
 	@echo "  make e2e-local          本地端到端测试（自动启动/验证接口）"
 	@echo ""
+
+# ============================================================================
+# Docker 镜像
+# ============================================================================
+
+docker-build: ## 构建 Docker 镜像
+	@echo "$(BLUE)构建 Docker 镜像...$(NC)"
+	docker build -t $(FULL_IMAGE) . --platform linux/amd64
+	@echo "$(GREEN)✓ 镜像构建完成: $(FULL_IMAGE)$(NC)"
+
+docker-push: ## 推送 Docker 镜像
+	@echo "$(BLUE)推送 Docker 镜像...$(NC)"
+	docker push $(FULL_IMAGE)
+	@echo "$(GREEN)✓ 镜像推送完成: $(FULL_IMAGE)$(NC)"
+
+docker-deploy: docker-build docker-push ## 构建并推送镜像（一键部署）
+	@echo "$(GREEN)✓ Docker 镜像部署完成$(NC)"
 
 # ============================================================================
 # 开发环境

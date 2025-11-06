@@ -1,5 +1,8 @@
 # 多阶段构建：编译阶段
-FROM golang:1.24-alpine AS builder
+FROM golang:1.23-alpine AS builder
+
+# 使用阿里云镜像源加速
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 
 # 安装依赖
 RUN apk add --no-cache git make

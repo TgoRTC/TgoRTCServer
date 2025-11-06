@@ -52,7 +52,10 @@ func SetupRouter(db *gorm.DB, redisClient *redis.Client, cfg *config.Config) *gi
 	})
 
 	// Swagger 文档路由
-	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(
+		swaggerFiles.Handler,
+		ginSwagger.URL("/api/docs/swagger.json"), // 使用自定义的 swagger.json
+	))
 	router.GET("/api/docs/swagger.json", handler.GetSwaggerJSON)
 
 	// API 路由组

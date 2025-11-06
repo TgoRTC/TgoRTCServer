@@ -10,22 +10,7 @@ import (
 	"tgo-rtc-server/internal/utils"
 
 	"github.com/joho/godotenv"
-
-	_ "tgo-rtc-server/docs"
 )
-
-// @title TgoRTC Server API
-// @version 1.0.0
-// @description 基于 LiveKit 的音视频服务 API
-// @contact.name API Support
-// @contact.url https://github.com/TgoRTC/TgoRTCServer
-// @host livekit.example.com
-// @schemes https http
-// @BasePath /api/v1
-// @securityDefinitions.apikey BearerAuth
-// @in header
-// @name Authorization
-// @description Type "Bearer" followed by a space and JWT token.
 
 func main() {
 	// 加载环境变量

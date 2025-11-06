@@ -45,6 +45,25 @@ redis:
   address: 0.0.0.0:6380 ### 请修改为你的 Redis 服务器地址和端口
   password: TgoRedis@2025 ### 请修改为你的 Redis 密码
   db: 0
+port: 7880
+rtc:
+  port_range_start: 50000
+  port_range_end: 50100
+  use_external_ip: true
+
+keys:
+  prodkey: Xj9K2mP5nQ8vR1wT4yU7zA0bC3dE6fG9
+
+redis:
+  address: 服务器IP:6380
+  password: TgoRedis@2024
+  db: 0
+
+# ⚠️ 重要：添加 webhook 配置
+webhook:
+  api_key: prodkey
+  urls:
+    - http://服务器IP:8080/api/v1/webhooks/livekit
 ```
 ### 安装 Docker 
 ```bash

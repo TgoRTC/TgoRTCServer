@@ -55,15 +55,22 @@ func (rh *RoomHandler) CreateRoom(c *gin.Context) {
 	resp, err := rh.roomService.CreateRoom(&req)
 	if err != nil {
 		if businessErr, ok := err.(*errors.BusinessError); ok {
+			// 业务错误统一返回 HTTP 400，通过响应体中的 code 字段区分具体错误
+			errorCode := businessErr.Code
+			if errorCode == 0 {
+				errorCode = 400 // 默认 400
+			}
+
 			logger.Warn("创建房间业务错误",
 				zap.String("error_key", string(businessErr.Key)),
 				zap.String("error_message", businessErr.GetLocalizedMessage(lang)),
+				zap.Int("error_code", errorCode),
 				zap.String("creator", req.Creator),
 				zap.String("source_channel_id", req.SourceChannelID),
 				zap.String("language", lang),
 			)
 			c.JSON(http.StatusBadRequest, gin.H{
-				"code": 400,
+				"code": errorCode,
 				"msg":  businessErr.GetLocalizedMessage(lang),
 			})
 		} else {

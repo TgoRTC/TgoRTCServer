@@ -129,10 +129,61 @@
             }
           },
           "400": {
-            "description": "请求参数错误"
+            "description": "业务错误（通过响应体中的 code 字段区分具体错误类型）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "错误码：400-参数错误，409-用户正在通话中"
+                    },
+                    "msg": {
+                      "type": "string",
+                      "description": "错误消息"
+                    }
+                  }
+                },
+                "examples": {
+                  "invalid_parameters": {
+                    "summary": "参数错误",
+                    "value": {
+                      "code": 400,
+                      "msg": "参数错误"
+                    }
+                  },
+                  "participant_in_call": {
+                    "summary": "用户正在通话中（code=409）",
+                    "description": "如果max_participants=2，且用户正在通话中，无法创建房间",
+                    "value": {
+                      "code": 409,
+                      "msg": "参与者 user_002 正在通话中，无法邀请"
+                    }
+                  }
+                }
+              }
+            }
           },
           "500": {
-            "description": "服务器内部错误"
+            "description": "服务器内部错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "example": 500
+                    },
+                    "msg": {
+                      "type": "string",
+                      "example": "服务器内部错误"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }

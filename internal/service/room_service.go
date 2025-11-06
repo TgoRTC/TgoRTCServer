@@ -77,7 +77,8 @@ func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.Create
 		if err := rs.db.Where("uid IN ? AND (status = ? OR status = ?)",
 			deduplicatedUIDs, models.ParticipantStatusInviting, models.ParticipantStatusJoined).
 			First(&busyParticipant).Error; err == nil {
-			return nil, errors.NewBusinessErrorWithKey(i18n.ParticipantInCall, busyParticipant.UID)
+			// 返回 409 Conflict 状态码，表示用户正在通话中
+			return nil, errors.NewConflictError(i18n.ParticipantInCall, busyParticipant.UID)
 		} else if err != gorm.ErrRecordNotFound {
 			return nil, errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
 		}

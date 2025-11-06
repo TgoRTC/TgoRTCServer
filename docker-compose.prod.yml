@@ -14,7 +14,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: tgo-rtc-server:latest
+    image: crpi-4ja8peh93d2yb8c8.cn-shanghai.personal.cr.aliyuncs.com/slun/tgortc:latest
     container_name: tgo-rtc-server
     ports:
       - "8080:8080"

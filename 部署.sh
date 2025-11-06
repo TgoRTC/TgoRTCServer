@@ -50,23 +50,33 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1" | tee -a "$LOG_FILE"
 }
 
+# Docker Compose 命令兼容性处理
+docker_compose() {
+    if docker compose version &> /dev/null; then
+        docker compose "$@"
+    else
+        docker-compose "$@"
+    fi
+}
+
 ################################################################################
 # 检查依赖
 ################################################################################
 
 check_dependencies() {
     log_info "检查依赖..."
-    
+
     local missing_deps=()
-    
+
     if ! command -v docker &> /dev/null; then
         missing_deps+=("docker")
     fi
-    
-    if ! command -v docker-compose &> /dev/null; then
+
+    # 检查 docker compose（新版）或 docker-compose（旧版）
+    if ! docker compose version &> /dev/null && ! command -v docker-compose &> /dev/null; then
         missing_deps+=("docker-compose")
     fi
-    
+
     if ! command -v curl &> /dev/null; then
         missing_deps+=("curl")
     fi
@@ -282,9 +292,16 @@ LIVEKIT_SERVERS_PLACEHOLDER
 }
 EOF
 
-    # 替换占位符
-    sed -i "s|DOMAIN|$DOMAIN|g" "$config_file"
-    sed -i "s|LIVEKIT_SERVERS_PLACEHOLDER|$livekit_servers|g" "$config_file"
+    # 替换占位符（兼容 macOS 和 Linux）
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS
+        sed -i '' "s|DOMAIN|$DOMAIN|g" "$config_file"
+        sed -i '' "s|LIVEKIT_SERVERS_PLACEHOLDER|$livekit_servers|g" "$config_file"
+    else
+        # Linux
+        sed -i "s|DOMAIN|$DOMAIN|g" "$config_file"
+        sed -i "s|LIVEKIT_SERVERS_PLACEHOLDER|$livekit_servers|g" "$config_file"
+    fi
 
     log_success "Nginx 配置已生成"
 }
@@ -535,7 +552,7 @@ deploy() {
 
     log_info "启动 Docker 容器..."
     cd "$DEPLOYMENT_DIR"
-    docker-compose up -d
+    docker_compose up -d
 
     sleep 5
 
@@ -599,7 +616,7 @@ EOF
 
     log_info "启动 Nginx 容器..."
     cd "$DEPLOYMENT_DIR"
-    docker-compose up -d
+    docker_compose up -d
 
     sleep 5
 
@@ -662,7 +679,7 @@ EOF
 
     log_info "启动 Nginx 容器..."
     cd "$DEPLOYMENT_DIR"
-    docker-compose up -d
+    docker_compose up -d
 
     sleep 5
 
@@ -682,7 +699,7 @@ deploy_livekit_only() {
 
     log_info "启动 Docker 容器..."
     cd "$DEPLOYMENT_DIR"
-    docker-compose up -d
+    docker_compose up -d
 
     sleep 5
 
@@ -704,13 +721,13 @@ init_https_cert() {
     mkdir -p ./volumes/certbot
 
     # 启动 nginx 和 certbot
-    docker-compose up -d nginx certbot
+    docker_compose up -d nginx certbot
 
     sleep 5
 
     # 申请证书
     log_info "申请 Let's Encrypt 证书..."
-    docker-compose exec -T certbot certbot certonly --webroot -w /var/www/certbot \
+    docker_compose exec -T certbot certbot certonly --webroot -w /var/www/certbot \
         -d "$DOMAIN" \
         --email admin@"$DOMAIN" \
         --agree-tos \
@@ -729,27 +746,27 @@ init_https_cert() {
 start_services() {
     log_info "启动服务..."
     cd "$DEPLOYMENT_DIR"
-    docker-compose up -d
+    docker_compose up -d
     log_success "服务已启动"
 }
 
 stop_services() {
     log_info "停止服务..."
     cd "$DEPLOYMENT_DIR"
-    docker-compose down
+    docker_compose down
     log_success "服务已停止"
 }
 
 restart_services() {
     log_info "重启服务..."
     cd "$DEPLOYMENT_DIR"
-    docker-compose restart
+    docker_compose restart
     log_success "服务已重启"
 }
 
 view_logs() {
     cd "$DEPLOYMENT_DIR"
-    docker-compose logs -f "$1"
+    docker_compose logs -f "$1"
 }
 
 backup_data() {
@@ -761,55 +778,55 @@ backup_data() {
     mkdir -p "$backup_path"
     
     cd "$DEPLOYMENT_DIR"
-    
-    docker-compose exec -T redis redis-cli BGSAVE
+
+    docker_compose exec -T redis redis-cli BGSAVE
     sleep 2
     cp -r volumes/redis "$backup_path/" 2>/dev/null || true
     cp -r config "$backup_path/"
-    
+
     log_success "数据已备份到: $backup_path"
 }
 
 restore_data() {
     log_info "恢复数据..."
-    
+
     if [ -z "$1" ] || [ ! -d "$1" ]; then
         log_error "备份目录不存在: $1"
         exit 1
     fi
-    
+
     cd "$DEPLOYMENT_DIR"
-    
-    docker-compose down
-    
+
+    docker_compose down
+
     rm -rf volumes/redis
     cp -r "$1/redis" volumes/ 2>/dev/null || true
     cp -r "$1/config" .
-    
-    docker-compose up -d
-    
+
+    docker_compose up -d
+
     log_success "数据已恢复"
 }
 
 verify_deployment() {
     log_info "验证部署..."
-    
+
     cd "$DEPLOYMENT_DIR"
-    
+
     log_info "检查容器状态..."
-    docker-compose ps
-    
+    docker_compose ps
+
     sleep 5
-    
+
     log_info "检查 LiveKit 健康状态..."
     if curl -s http://localhost:7880/ > /dev/null; then
         log_success "LiveKit 服务正常运行"
     else
         log_warning "LiveKit 服务未响应"
     fi
-    
+
     log_info "检查 Redis 连接..."
-    if docker-compose exec -T redis redis-cli ping > /dev/null 2>&1; then
+    if docker_compose exec -T redis redis-cli ping > /dev/null 2>&1; then
         log_success "Redis 连接正常"
     else
         log_warning "Redis 连接失败"

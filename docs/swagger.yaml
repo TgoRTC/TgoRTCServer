@@ -36,11 +36,22 @@ paths:
               schema:
                 $ref: '#/components/schemas/CreateRoomResponse'
         '400':
-          description: 请求参数错误
+          description: 业务错误（通过响应体中的 code 字段区分具体错误类型）
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_parameters:
+                  summary: 参数错误
+                  value:
+                    code: 400
+                    msg: 参数错误
+                participant_in_call:
+                  summary: 用户正在通话中（code=409）
+                  value:
+                    code: 409
+                    msg: 参与者 user_002 正在通话中，无法邀请
         '500':
           description: 服务器内部错误
           content:
