@@ -16,9 +16,8 @@ RUN go mod download
 # 复制源代码
 COPY . .
 
-# 生成 Swagger 文档
-RUN go install github.com/swaggo/swag/cmd/swag@latest && \
-    swag init
+# 注意：docs/ 目录中的 swagger 文件是手动维护的完整版本
+# 不需要运行 swag init，直接使用已有的文件即可
 
 # 编译应用
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
@@ -44,6 +43,7 @@ WORKDIR /app
 # 从构建阶段复制二进制文件
 COPY --from=builder /app/tgo-rtc-server .
 COPY --from=builder /app/docs ./docs
+COPY --from=builder /app/migrations ./migrations
 
 # 设置权限
 RUN chown -R appuser:appuser /app

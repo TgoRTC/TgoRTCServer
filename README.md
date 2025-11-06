@@ -81,12 +81,21 @@ TgoRTC Server 支持连接到 LiveKit 集群，实现高可用和负载均衡。
 
 #### 1. 单 LiveKit 服务器
 
+**TgoRTC Server 配置（.env）：**
 ```env
-# .env
 LIVEKIT_URL=http://livekit.example.com:7880
-LIVEKIT_API_KEY=your_api_key
-LIVEKIT_API_SECRET=your_api_secret
+LIVEKIT_API_KEY=devkey
+LIVEKIT_API_SECRET=secret
 ```
+
+**LiveKit Server 配置（livekit.yaml）：**
+```yaml
+port: 7880
+keys:
+  devkey: secret  # 与 .env 中的 API_KEY 和 SECRET 对应
+```
+
+**说明：** LiveKit 的 API Key 和 Secret 是在 `livekit.yaml` 中自己定义的，然后在 TgoRTC Server 的 `.env` 文件中配置相同的值。
 
 #### 2. LiveKit 集群（多服务器）
 
@@ -120,7 +129,7 @@ LIVEKIT_API_SECRET=your_api_secret
 
 ### 负载均衡
 
-推荐使用 Nginx 或 Caddy 作为 LiveKit 集群的负载均衡器：
+使用 Nginx 作为 LiveKit 集群的负载均衡器：
 
 **Nginx 配置示例：**
 ```nginx
@@ -130,21 +139,18 @@ upstream livekit_cluster {
 }
 
 server {
-    listen 7880;
+    listen 80;
+    server_name livekit.example.com;
+
     location / {
         proxy_pass http://livekit_cluster;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-    }
-}
-```
-
-**Caddy 配置示例：**
-```
-livekit.example.com:7880 {
-    reverse_proxy livekit1.example.com:7880 livekit2.example.com:7880 {
-        lb_policy round_robin
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
 ```

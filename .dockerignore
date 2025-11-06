@@ -50,7 +50,7 @@ docker-compose.yml
 .dockerignore
 
 # Documentation
-docs/
+# docs/ 目录包含 Swagger 文档，需要打包到镜像中
 README.md
 *.md
 
