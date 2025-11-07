@@ -16,6 +16,7 @@ const (
 	ParticipantInCall           MessageKey = "participant_in_call"
 	RoomNotFound                MessageKey = "room_not_found"
 	RoomNotActive               MessageKey = "room_not_active"
+	RoomFull                    MessageKey = "room_full"
 	RoomCreationFailed          MessageKey = "room_creation_failed"
 	CreatorParticipantAddFailed MessageKey = "creator_participant_add_failed"
 	InvitedParticipantAddFailed MessageKey = "invited_participant_add_failed"
@@ -46,6 +47,7 @@ var Translations = map[string]map[MessageKey]string{
 		ParticipantInCall:             "参与者 %s 正在通话中，无法邀请",
 		RoomNotFound:                  "房间不存在: %s",
 		RoomNotActive:                 "房间已结束或已取消，无法加入",
+		RoomFull:                      "房间人数已满，无法加入",
 		RoomCreationFailed:            "创建房间失败: %v",
 		CreatorParticipantAddFailed:   "添加创建者参与者记录失败: %v",
 		InvitedParticipantAddFailed:   "添加邀请参与者记录失败: %v",
@@ -69,6 +71,7 @@ var Translations = map[string]map[MessageKey]string{
 		ParticipantInCall:             "參與者 %s 正在通話中，無法邀請",
 		RoomNotFound:                  "房間不存在: %s",
 		RoomNotActive:                 "房間已結束或已取消，無法加入",
+		RoomFull:                      "房間人數已滿，無法加入",
 		RoomCreationFailed:            "建立房間失敗: %v",
 		CreatorParticipantAddFailed:   "新增建立者參與者記錄失敗: %v",
 		InvitedParticipantAddFailed:   "新增邀請參與者記錄失敗: %v",
@@ -92,6 +95,7 @@ var Translations = map[string]map[MessageKey]string{
 		ParticipantInCall:             "Participant %s is in a call, cannot invite",
 		RoomNotFound:                  "Room not found: %s",
 		RoomNotActive:                 "Room has ended or been cancelled, cannot join",
+		RoomFull:                      "Room is full, cannot join",
 		RoomCreationFailed:            "Failed to create room: %v",
 		CreatorParticipantAddFailed:   "Failed to add creator participant record: %v",
 		InvitedParticipantAddFailed:   "Failed to add invited participant record: %v",
@@ -115,6 +119,7 @@ var Translations = map[string]map[MessageKey]string{
 		ParticipantInCall:             "Le participant %s est en appel, impossible d'inviter",
 		RoomNotFound:                  "Salle non trouvée: %s",
 		RoomNotActive:                 "La salle a pris fin ou a été annulée, impossible de rejoindre",
+		RoomFull:                      "La salle est pleine, impossible de rejoindre",
 		RoomCreationFailed:            "Échec de la création de la salle: %v",
 		CreatorParticipantAddFailed:   "Échec de l'ajout du participant créateur: %v",
 		InvitedParticipantAddFailed:   "Échec de l'ajout du participant invité: %v",
@@ -138,6 +143,7 @@ var Translations = map[string]map[MessageKey]string{
 		ParticipantInCall:             "参加者 %s は通話中です。招待できません",
 		RoomNotFound:                  "ルームが見つかりません: %s",
 		RoomNotActive:                 "ルームは終了またはキャンセルされています。参加できません",
+		RoomFull:                      "ルームは満員です。参加できません",
 		RoomCreationFailed:            "ルームの作成に失敗しました: %v",
 		CreatorParticipantAddFailed:   "作成者参加者レコードの追加に失敗しました: %v",
 		InvitedParticipantAddFailed:   "招待された参加者レコードの追加に失敗しました: %v",

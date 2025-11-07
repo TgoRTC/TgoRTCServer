@@ -56,17 +56,23 @@ type CreateRoomRequest struct {
 	UIDs              []string `json:"uids"`             // 邀请的用户 ID 列表
 }
 
-// CreateRoomResponse 创建房间响应
-type CreateRoomResponse struct {
-	RoomID          string `json:"room_id"`
-	Creator         string `json:"creator"`
-	Token           string `json:"token"`
-	URL             string `json:"url"`
-	Status          int16  `json:"status"`
-	CreatedAt       string `json:"created_at"` // yyyy-mm-dd hh:mm:ss 格式
-	MaxParticipants int    `json:"max_participants"`
-	Timeout         int    `json:"timeout"` // 单位：秒
+// RoomResp 房间响应（创建房间和加入房间共用）
+type RoomResp struct {
+	SourceChannelID   string   `json:"source_channel_id" binding:"required"`
+	SourceChannelType int      `json:"source_channel_type"`
+	RoomID            string   `json:"room_id"`
+	Creator           string   `json:"creator"`
+	Token             string   `json:"token"`
+	URL               string   `json:"url"`
+	Status            int16    `json:"status"`
+	CreatedAt         string   `json:"created_at"` // yyyy-mm-dd hh:mm:ss 格式
+	MaxParticipants   int      `json:"max_participants"`
+	Timeout           int      `json:"timeout"` // 单位：秒
+	UIDs              []string `json:"uids"`    // 参与者uids
 }
+
+// CreateRoomResponse 创建房间响应（别名，保持向后兼容）
+type CreateRoomResponse = RoomResp
 
 // GetRoomResponse 获取房间响应
 type GetRoomResponse struct {

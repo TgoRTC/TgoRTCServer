@@ -39,17 +39,8 @@ type JoinRoomRequest struct {
 	UID    string `json:"uid" binding:"required"`
 }
 
-// JoinRoomResponse 加入房间响应
-type JoinRoomResponse struct {
-	RoomID          string `json:"room_id"`
-	Creator         string `json:"creator"`
-	Token           string `json:"token"`
-	URL             string `json:"url"`
-	Status          int16  `json:"status"`
-	CreatedAt       string `json:"created_at"` // yyyy-mm-dd hh:mm:ss 格式
-	MaxParticipants int    `json:"max_participants"`
-	Timeout         int    `json:"timeout"` // 单位：秒
-}
+// JoinRoomResponse 加入房间响应（别名，保持向后兼容）
+type JoinRoomResponse = RoomResp
 
 // LeaveRoomRequest 离开房间请求
 // room_id 从 URL 参数中获取: POST /api/v1/rooms/:room_id/leave

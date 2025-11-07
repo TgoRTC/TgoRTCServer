@@ -147,14 +147,24 @@ func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.Create
 		return nil, errors.NewBusinessErrorWithKey(i18n.TokenGenerationFailed, err.Error())
 	}
 
+	// 获取所有参与者的 UIDs
+	var participants []models.Participant
+	if err := rs.db.Where("room_id = ?", roomID).Find(&participants).Error; err != nil {
+		return nil, errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
+	}
+	uids := append(req.UIDs, req.Creator)
+	uids = rs.participantDeduplicator.DeduplicateUIDs(uids)
 	return &models.CreateRoomResponse{
-		RoomID:          roomID,
-		Creator:         req.Creator,
-		Token:           tokenResult.Token,
-		URL:             tokenResult.URL,
-		Status:          models.RoomStatusNotStarted,
-		CreatedAt:       rs.timeFormatter.FormatDateTime(time.Now()),
-		MaxParticipants: maxParticipants,
-		Timeout:         tokenResult.Timeout,
+		SourceChannelID:   req.SourceChannelID,
+		SourceChannelType: req.SourceChannelType,
+		RoomID:            roomID,
+		Creator:           req.Creator,
+		Token:             tokenResult.Token,
+		URL:               tokenResult.URL,
+		Status:            models.RoomStatusNotStarted,
+		CreatedAt:         rs.timeFormatter.FormatDateTime(time.Now()),
+		MaxParticipants:   maxParticipants,
+		Timeout:           tokenResult.Timeout,
+		UIDs:              uids,
 	}, nil
 }

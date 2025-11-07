@@ -99,29 +99,52 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "source_channel_id": {
+                      "type": "string",
+                      "description": "来源渠道 ID"
+                    },
+                    "source_channel_type": {
+                      "type": "integer",
+                      "description": "来源渠道类型"
+                    },
                     "room_id": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "房间 ID"
                     },
                     "creator": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "房间创建者 ID"
                     },
                     "token": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "LiveKit Token"
                     },
                     "url": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "LiveKit 服务器 URL"
                     },
                     "status": {
-                      "type": "integer"
+                      "type": "integer",
+                      "description": "房间状态（0: 未开始, 1: 进行中, 2: 已结束, 3: 已取消）"
                     },
                     "created_at": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "创建时间"
                     },
                     "max_participants": {
-                      "type": "integer"
+                      "type": "integer",
+                      "description": "最大参与者数"
                     },
                     "timeout": {
-                      "type": "integer"
+                      "type": "integer",
+                      "description": "超时时间（秒）"
+                    },
+                    "uids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "所有参与者的 UID 列表"
                     }
                   }
                 }
@@ -266,7 +289,63 @@
         },
         "responses": {
           "200": {
-            "description": "加入房间成功"
+            "description": "加入房间成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "source_channel_id": {
+                      "type": "string",
+                      "description": "来源渠道 ID"
+                    },
+                    "source_channel_type": {
+                      "type": "integer",
+                      "description": "来源渠道类型"
+                    },
+                    "room_id": {
+                      "type": "string",
+                      "description": "房间 ID"
+                    },
+                    "creator": {
+                      "type": "string",
+                      "description": "房间创建者 ID"
+                    },
+                    "token": {
+                      "type": "string",
+                      "description": "LiveKit Token"
+                    },
+                    "url": {
+                      "type": "string",
+                      "description": "LiveKit 服务器 URL"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "description": "房间状态（0: 未开始, 1: 进行中, 2: 已结束, 3: 已取消）"
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "description": "创建时间"
+                    },
+                    "max_participants": {
+                      "type": "integer",
+                      "description": "最大参与者数"
+                    },
+                    "timeout": {
+                      "type": "integer",
+                      "description": "超时时间（秒）"
+                    },
+                    "uids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "所有参与者的 UID 列表"
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "请求参数错误"

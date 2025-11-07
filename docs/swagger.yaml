@@ -334,6 +334,14 @@ components:
     CreateRoomResponse:
       type: object
       properties:
+        source_channel_id:
+          type: string
+          description: 来源渠道 ID
+          example: "channel_001"
+        source_channel_type:
+          type: integer
+          description: 来源渠道类型
+          example: 0
         room_id:
           type: string
           description: 房间 ID
@@ -366,6 +374,12 @@ components:
           type: integer
           description: 超时时间（秒）
           example: 3600
+        uids:
+          type: array
+          items:
+            type: string
+          description: 所有参与者的 UID 列表
+          example: ["user_001", "user_002", "user_003"]
 
     JoinRoomRequest:
       type: object
@@ -377,41 +391,10 @@ components:
           description: 用户 ID
           example: "user_002"
 
+    # JoinRoomResponse 和 CreateRoomResponse 使用相同的结构
+    # 为了保持向后兼容，这里使用引用
     JoinRoomResponse:
-      type: object
-      properties:
-        room_id:
-          type: string
-          description: 房间 ID
-          example: "room_abc123"
-        creator:
-          type: string
-          description: 房间创建者 ID
-          example: "user_001"
-        token:
-          type: string
-          description: LiveKit Token
-          example: "eyJhbGc..."
-        url:
-          type: string
-          description: LiveKit 服务器 URL
-          example: "http://localhost:7880"
-        status:
-          type: integer
-          description: 房间状态
-          example: 1
-        created_at:
-          type: string
-          description: 创建时间
-          example: "2024-01-15 10:30:00"
-        max_participants:
-          type: integer
-          description: 最大参与者数
-          example: 2
-        timeout:
-          type: integer
-          description: 超时时间（秒）
-          example: 3600
+      $ref: '#/components/schemas/CreateRoomResponse'
 
     LeaveRoomRequest:
       type: object

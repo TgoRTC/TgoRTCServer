@@ -42,6 +42,18 @@ func (ps *ParticipantService) JoinRoom(req *models.JoinRoomRequest) (*models.Joi
 		return nil, errors.NewBusinessErrorWithKey(i18n.RoomNotActive)
 	}
 
+	// 检查房间参与者人数是否已达到最大值（包括邀请中和已加入的）
+	var participantCount int64
+	if err := ps.db.Model(&models.Participant{}).
+		Where("room_id = ? AND status IN ?", req.RoomID, []int{models.ParticipantStatusInviting, models.ParticipantStatusJoined}).
+		Count(&participantCount).Error; err != nil {
+		return nil, errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
+	}
+
+	if int(participantCount) >= room.MaxParticipants {
+		return nil, errors.NewBusinessErrorWithKey(i18n.RoomFull)
+	}
+
 	// 如果房间开启了邀请，检查该用户是否被邀请
 	if room.InviteOn == models.InviteEnabled {
 		var invitedParticipant models.Participant
@@ -81,15 +93,29 @@ func (ps *ParticipantService) JoinRoom(req *models.JoinRoomRequest) (*models.Joi
 		return nil, errors.NewBusinessErrorWithKey(i18n.TokenGenerationFailed, err.Error())
 	}
 
+	// 获取所有参与者的 UIDs
+	var participants []models.Participant
+	if err := ps.db.Where("room_id = ?", req.RoomID).Find(&participants).Error; err != nil {
+		return nil, errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
+	}
+
+	uids := make([]string, 0, len(participants))
+	for _, p := range participants {
+		uids = append(uids, p.UID)
+	}
+
 	return &models.JoinRoomResponse{
-		RoomID:          req.RoomID,
-		Creator:         room.Creator,
-		Token:           tokenResult.Token,
-		URL:             tokenResult.URL,
-		Status:          room.Status,
-		CreatedAt:       ps.timeFormatter.FormatDateTime(room.CreatedAt),
-		MaxParticipants: room.MaxParticipants,
-		Timeout:         tokenResult.Timeout,
+		SourceChannelID:   room.SourceChannelID,
+		SourceChannelType: int(room.SourceChannelType),
+		RoomID:            req.RoomID,
+		Creator:           room.Creator,
+		Token:             tokenResult.Token,
+		URL:               tokenResult.URL,
+		Status:            room.Status,
+		CreatedAt:         ps.timeFormatter.FormatDateTime(room.CreatedAt),
+		MaxParticipants:   room.MaxParticipants,
+		Timeout:           tokenResult.Timeout,
+		UIDs:              uids,
 	}, nil
 }
 
