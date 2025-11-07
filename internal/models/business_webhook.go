@@ -15,13 +15,11 @@ type BusinessWebhookEvent struct {
 // 业务事件类型常量
 const (
 	// 房间事件
-	BusinessEventRoomCreated   = "room.created"   // 房间已创建
 	BusinessEventRoomStarted   = "room.started"   // 房间已开始
 	BusinessEventRoomFinished  = "room.finished"  // 房间已结束
 	BusinessEventRoomCancelled = "room.cancelled" // 房间已取消
 
 	// 参与者事件
-	BusinessEventParticipantInvited   = "participant.invited"   // 参与者已邀请
 	BusinessEventParticipantJoined    = "participant.joined"    // 参与者已加入
 	BusinessEventParticipantLeft      = "participant.left"      // 参与者已离开
 	BusinessEventParticipantRejected  = "participant.rejected"  // 参与者已拒绝
@@ -32,25 +30,23 @@ const (
 
 // RoomEventData 房间事件数据
 type RoomEventData struct {
-	RoomID          string `json:"room_id"`
-	Creator         string `json:"creator"`
-	RTCType         int    `json:"rtc_type"`         // 0: 语音, 1: 视频
-	InviteOn        int    `json:"invite_on"`        // 0: 否, 1: 是
-	Status          int    `json:"status"`           // 房间状态
-	MaxParticipants int    `json:"max_participants"` // 最大参与者数
-	CreatedAt       int64  `json:"created_at"`
-	UpdatedAt       int64  `json:"updated_at"`
+	SourceChannelID   string `json:"source_channel_id"`
+	SourceChannelType uint8  `json:"source_channel_type"`
+	RoomID            string `json:"room_id"`
+	Creator           string `json:"creator"`
+	RTCType           uint8  `json:"rtc_type"`         // 0: 语音, 1: 视频
+	InviteOn          uint8  `json:"invite_on"`        // 0: 否, 1: 是
+	Status            uint8  `json:"status"`           // 房间状态
+	MaxParticipants   int    `json:"max_participants"` // 最大参与者数
+	CreatedAt         int64  `json:"created_at"`
+	UpdatedAt         int64  `json:"updated_at"`
 }
 
 // ParticipantEventData 参与者事件数据
+// 用于所有参与者相关事件：joined, left, rejected, timeout, missed, cancelled
 type ParticipantEventData struct {
-	RoomID    string `json:"room_id"`
-	UID       string `json:"uid"`
-	Status    int    `json:"status"`     // 参与者状态
-	JoinTime  int64  `json:"join_time"`  // 加入时间戳（秒）
-	LeaveTime int64  `json:"leave_time"` // 离开时间戳（秒）
-	CreatedAt int64  `json:"created_at"`
-	UpdatedAt int64  `json:"updated_at"`
+	RoomEventData        // 嵌入房间事件数据
+	UID           string `json:"uid"` // 操作者 UID（加入者/离开者/拒绝者等）
 }
 
 // BusinessWebhookRequest 业务 webhook 请求

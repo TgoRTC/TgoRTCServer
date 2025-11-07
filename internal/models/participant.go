@@ -72,19 +72,10 @@ type UpdateParticipantStatusRequest struct {
 	Status int `json:"status" binding:"required"`
 }
 
-// CheckUserCallStatusRequest 检查用户通话状态请求
-type CheckUserCallStatusRequest struct {
-	UIDs []string `json:"uids" binding:"required"`
+// GetUserAvailableRoomsRequest 获取用户可加入的房间列表请求
+type GetUserAvailableRoomsRequest struct {
+	UID string `json:"uid" binding:"required"`
 }
 
-// UserCallStatus 用户通话状态信息
-type UserCallStatus struct {
-	RoomID string `json:"room_id"`
-	UID    string `json:"uid"`
-	Status int16  `json:"status"`
-}
-
-// CheckUserCallStatusResponse 检查用户通话状态响应
-type CheckUserCallStatusResponse struct {
-	Data []UserCallStatus `json:"data"`
-}
+// GetUserAvailableRoomsResponse 获取用户可加入的房间列表响应（RoomResp 数组）
+type GetUserAvailableRoomsResponse []RoomResp

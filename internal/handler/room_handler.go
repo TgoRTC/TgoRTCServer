@@ -2,7 +2,6 @@ package handler
 
 import (
 	"net/http"
-	"time"
 
 	"tgo-rtc-server/internal/errors"
 	"tgo-rtc-server/internal/i18n"
@@ -87,19 +86,5 @@ func (rh *RoomHandler) CreateRoom(c *gin.Context) {
 		}
 		return
 	}
-
-	// 发送业务 webhook 事件
-	if rh.businessWebhookService != nil && resp != nil {
-		eventData := &models.RoomEventData{
-			RoomID:          resp.RoomID,
-			Creator:         resp.Creator,
-			Status:          int(resp.Status),
-			MaxParticipants: resp.MaxParticipants,
-			CreatedAt:       time.Now().Unix(),
-			UpdatedAt:       time.Now().Unix(),
-		}
-		_ = rh.businessWebhookService.SendEvent(models.BusinessEventRoomCreated, eventData)
-	}
-
 	c.JSON(http.StatusOK, resp)
 }

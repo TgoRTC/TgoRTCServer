@@ -9,22 +9,25 @@ import (
 	"tgo-rtc-server/internal/models"
 	"tgo-rtc-server/internal/utils"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
 // ParticipantService 参与者服务
 type ParticipantService struct {
-	db             *gorm.DB
-	tokenGenerator *livekit.TokenGenerator
-	timeFormatter  *utils.TimeFormatter
+	db                     *gorm.DB
+	tokenGenerator         *livekit.TokenGenerator
+	timeFormatter          *utils.TimeFormatter
+	businessWebhookService *BusinessWebhookService
 }
 
 // NewParticipantService 创建参与者服务
-func NewParticipantService(db *gorm.DB, tokenGenerator *livekit.TokenGenerator) *ParticipantService {
+func NewParticipantService(db *gorm.DB, tokenGenerator *livekit.TokenGenerator, businessWebhookService *BusinessWebhookService) *ParticipantService {
 	return &ParticipantService{
-		db:             db,
-		tokenGenerator: tokenGenerator,
-		timeFormatter:  utils.NewTimeFormatter(),
+		db:                     db,
+		tokenGenerator:         tokenGenerator,
+		timeFormatter:          utils.NewTimeFormatter(),
+		businessWebhookService: businessWebhookService,
 	}
 }
 
@@ -106,11 +109,12 @@ func (ps *ParticipantService) JoinRoom(req *models.JoinRoomRequest) (*models.Joi
 
 	return &models.JoinRoomResponse{
 		SourceChannelID:   room.SourceChannelID,
-		SourceChannelType: int(room.SourceChannelType),
+		SourceChannelType: room.SourceChannelType,
 		RoomID:            req.RoomID,
 		Creator:           room.Creator,
 		Token:             tokenResult.Token,
 		URL:               tokenResult.URL,
+		RTCType:           room.RTCType,
 		Status:            room.Status,
 		CreatedAt:         ps.timeFormatter.FormatDateTime(room.CreatedAt),
 		MaxParticipants:   room.MaxParticipants,
@@ -130,14 +134,330 @@ func (ps *ParticipantService) LeaveRoom(req *models.LeaveRoomRequest) error {
 		return errors.NewBusinessErrorWithKey(i18n.RoomQueryFailed, err.Error())
 	}
 
+	// 查询当前参与者的状态
+	var currentParticipant models.Participant
+	if err := ps.db.Where("room_id = ? AND uid = ?", req.RoomID, req.UID).First(&currentParticipant).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return errors.NewBusinessErrorWithKey(i18n.ParticipantNotFound, req.UID)
+		}
+		return errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
+	}
+
+	// 查询所有参与者
+	var allParticipants []models.Participant
+	if err := ps.db.Where("room_id = ?", req.RoomID).Find(&allParticipants).Error; err != nil {
+		return errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
+	}
+
+	// 判断是否为一对一通话（MaxParticipants = 2）
+	isOneToOne := room.MaxParticipants == 2
+	isCreator := room.Creator == req.UID
+	hasJoined := currentParticipant.Status == models.ParticipantStatusJoined
+
+	// 统计已加入的参与者数量
+	joinedCount := 0
+	for _, p := range allParticipants {
+		if p.Status == models.ParticipantStatusJoined {
+			joinedCount++
+		}
+	}
+
+	if isOneToOne {
+		// 一对一通话场景（MaxParticipants = 2）
+		if isCreator {
+			// 情况1：发起者主动挂断
+			switch joinedCount {
+			case 1:
+				// 只有发起者自己加入，对方还未加入 -> 取消通话
+				return ps.handleCreatorCancelCall(req.RoomID)
+			case 2:
+				// 情况3：双方都已加入 -> 结束通话挂断（走默认逻辑）
+			}
+		} else {
+			// 情况2：非发起者离开（对方拒绝通话或挂断）
+			if !hasJoined {
+				// 对方还未加入就离开 -> 拒绝通话
+				return ps.handleParticipantReject(req.RoomID, req.UID)
+			}
+			// 情况3：双方都已加入 -> 结束通话挂断（走默认逻辑）
+		}
+	} else {
+		// 多人通话场景（MaxParticipants > 2）
+		if !hasJoined {
+			// 情况4：参与者未加入就离开 -> 拒绝通话
+			return ps.handleParticipantReject(req.RoomID, req.UID)
+		}
+		// 情况4：参与者已加入后离开 -> 正常挂断（走默认逻辑）
+	}
+
+	// 默认处理：正常挂断（情况3和情况4b）
+	return ps.handleNormalHangup(req.RoomID, req.UID)
+}
+
+// handleCreatorCancelCall 处理发起者取消通话（情况1）
+// 发起者主动挂断，对方还未加入 -> 取消通话
+func (ps *ParticipantService) handleCreatorCancelCall(roomID string) error {
+	logger := utils.GetLogger()
+
+	// 查询房间信息
+	var room models.Room
+	if err := ps.db.Where("room_id = ?", roomID).First(&room).Error; err != nil {
+		logger.Error("查询房间信息失败",
+			zap.String("room_id", roomID),
+			zap.Error(err),
+		)
+		return errors.NewBusinessErrorWithKey(i18n.RoomQueryFailed, err.Error())
+	}
+
+	// 1. 更新房间状态为已取消
+	if err := ps.db.Model(&models.Room{}).
+		Where("room_id = ?", roomID).
+		Update("status", models.RoomStatusCancelled).Error; err != nil {
+		logger.Error("更新房间状态失败",
+			zap.String("room_id", roomID),
+			zap.Error(err),
+		)
+		return errors.NewBusinessErrorWithKey(i18n.RoomStatusUpdateFailed, err.Error())
+	}
+
+	// 2. 更新所有参与者状态为已取消
 	if err := ps.db.Model(&models.Participant{}).
-		Where("room_id = ? AND uid = ?", req.RoomID, req.UID).
+		Where("room_id = ?", roomID).
+		Update("status", models.ParticipantStatusCancelled).Error; err != nil {
+		logger.Error("更新参与者状态失败",
+			zap.String("room_id", roomID),
+			zap.Error(err),
+		)
+		return errors.NewBusinessErrorWithKey(i18n.ParticipantStatusUpdateFailed, err.Error())
+	}
+
+	// 3. 发送业务 webhook 事件（只发送一次）
+	if ps.businessWebhookService != nil {
+		// 构建事件数据
+		eventData := &models.ParticipantEventData{
+			RoomEventData: models.RoomEventData{
+				SourceChannelID:   room.SourceChannelID,
+				SourceChannelType: room.SourceChannelType,
+				RoomID:            room.RoomID,
+				Creator:           room.Creator,
+				RTCType:           room.RTCType,
+				InviteOn:          room.InviteOn,
+				Status:            models.RoomStatusCancelled,
+				MaxParticipants:   room.MaxParticipants,
+				CreatedAt:         room.CreatedAt.Unix(),
+				UpdatedAt:         time.Now().Unix(),
+			},
+			UID: room.Creator, // 取消者是房间创建者
+		}
+
+		// 发送一次 webhook 事件
+		if err := ps.businessWebhookService.SendEvent(models.BusinessEventParticipantCancelled, eventData); err != nil {
+			logger.Error("发送业务 webhook 事件失败",
+				zap.String("room_id", roomID),
+				zap.String("event_type", models.BusinessEventParticipantCancelled),
+				zap.Error(err),
+			)
+		}
+	}
+
+	logger.Info("发起者取消通话成功",
+		zap.String("room_id", roomID),
+	)
+
+	return nil
+}
+
+// handleParticipantReject 处理参与者拒绝通话（情况2和情况4）
+// 参与者未加入就离开 -> 拒绝通话
+func (ps *ParticipantService) handleParticipantReject(roomID, uid string) error {
+	logger := utils.GetLogger()
+
+	// 查询房间信息
+	var room models.Room
+	if err := ps.db.Where("room_id = ?", roomID).First(&room).Error; err != nil {
+		logger.Error("查询房间信息失败",
+			zap.String("room_id", roomID),
+			zap.Error(err),
+		)
+		return errors.NewBusinessErrorWithKey(i18n.RoomQueryFailed, err.Error())
+	}
+
+	// 1. 更新当前参与者状态为已拒绝
+	if err := ps.db.Model(&models.Participant{}).
+		Where("room_id = ? AND uid = ?", roomID, uid).
+		Updates(map[string]interface{}{
+			"status":     models.ParticipantStatusRejected,
+			"leave_time": time.Now().Unix(),
+		}).Error; err != nil {
+		logger.Error("更新参与者状态失败",
+			zap.String("room_id", roomID),
+			zap.String("uid", uid),
+			zap.Error(err),
+		)
+		return errors.NewBusinessErrorWithKey(i18n.ParticipantStatusUpdateFailed, err.Error())
+	}
+
+	// 2. 如果是一对一通话（MaxParticipants=2），更新房间状态和另一个参与者状态
+	if room.MaxParticipants == 2 {
+		// 2.1 更新房间状态为已拒绝
+		if err := ps.db.Model(&models.Room{}).
+			Where("room_id = ?", roomID).
+			Update("status", models.RoomStatusRejected).Error; err != nil {
+			logger.Error("更新房间状态失败",
+				zap.String("room_id", roomID),
+				zap.Error(err),
+			)
+			return errors.NewBusinessErrorWithKey(i18n.RoomStatusUpdateFailed, err.Error())
+		}
+
+		// 2.2 更新另一个参与者状态为已拒绝
+		if err := ps.db.Model(&models.Participant{}).
+			Where("room_id = ? AND uid != ?", roomID, uid).
+			Updates(map[string]interface{}{
+				"status":     models.ParticipantStatusRejected,
+				"leave_time": time.Now().Unix(),
+			}).Error; err != nil {
+			logger.Error("更新另一个参与者状态失败",
+				zap.String("room_id", roomID),
+				zap.String("uid", uid),
+				zap.Error(err),
+			)
+			// 这里不返回错误，因为主要操作已经完成
+		}
+	}
+
+	// 3. 发送业务 webhook 事件（不管多少人都发送）
+	if ps.businessWebhookService != nil {
+		// 构建事件数据
+		eventData := &models.ParticipantEventData{
+			RoomEventData: models.RoomEventData{
+				SourceChannelID:   room.SourceChannelID,
+				SourceChannelType: room.SourceChannelType,
+				RoomID:            room.RoomID,
+				Creator:           room.Creator,
+				RTCType:           room.RTCType,
+				InviteOn:          room.InviteOn,
+				Status:            room.Status,
+				MaxParticipants:   room.MaxParticipants,
+				CreatedAt:         room.CreatedAt.Unix(),
+				UpdatedAt:         time.Now().Unix(),
+			},
+			UID: uid, // 拒绝者是当前离开的参与者
+		}
+
+		// 发送一次 webhook 事件
+		if err := ps.businessWebhookService.SendEvent(models.BusinessEventParticipantRejected, eventData); err != nil {
+			logger.Error("发送业务 webhook 事件失败",
+				zap.String("room_id", roomID),
+				zap.String("event_type", models.BusinessEventParticipantRejected),
+				zap.Error(err),
+			)
+		}
+	}
+
+	logger.Info("参与者拒绝通话",
+		zap.String("room_id", roomID),
+		zap.String("uid", uid),
+		zap.Int("max_participants", room.MaxParticipants),
+	)
+
+	return nil
+}
+
+// handleNormalHangup 处理正常挂断（情况3和情况4）
+// 参与者已加入后离开 -> 正常挂断
+func (ps *ParticipantService) handleNormalHangup(roomID, uid string) error {
+	logger := utils.GetLogger()
+
+	// 查询房间信息
+	var room models.Room
+	if err := ps.db.Where("room_id = ?", roomID).First(&room).Error; err != nil {
+		logger.Error("查询房间信息失败",
+			zap.String("room_id", roomID),
+			zap.Error(err),
+		)
+		return errors.NewBusinessErrorWithKey(i18n.RoomQueryFailed, err.Error())
+	}
+
+	// 1. 更新当前参与者状态为已挂断
+	if err := ps.db.Model(&models.Participant{}).
+		Where("room_id = ? AND uid = ?", roomID, uid).
 		Updates(map[string]interface{}{
 			"status":     models.ParticipantStatusHangup,
 			"leave_time": time.Now().Unix(),
 		}).Error; err != nil {
+		logger.Error("更新参与者状态失败",
+			zap.String("room_id", roomID),
+			zap.String("uid", uid),
+			zap.Error(err),
+		)
 		return errors.NewBusinessErrorWithKey(i18n.ParticipantStatusUpdateFailed, err.Error())
 	}
+
+	// 2. 如果是一对一通话（MaxParticipants=2），更新房间状态和另一个参与者状态
+	if room.MaxParticipants == 2 {
+		// 2.1 更新房间状态为已结束
+		if err := ps.db.Model(&models.Room{}).
+			Where("room_id = ?", roomID).
+			Update("status", models.RoomStatusFinished).Error; err != nil {
+			logger.Error("更新房间状态失败",
+				zap.String("room_id", roomID),
+				zap.Error(err),
+			)
+			return errors.NewBusinessErrorWithKey(i18n.RoomStatusUpdateFailed, err.Error())
+		}
+
+		// 2.2 更新另一个参与者状态为已挂断
+		if err := ps.db.Model(&models.Participant{}).
+			Where("room_id = ? AND uid != ?", roomID, uid).
+			Updates(map[string]interface{}{
+				"status":     models.ParticipantStatusHangup,
+				"leave_time": time.Now().Unix(),
+			}).Error; err != nil {
+			logger.Error("更新另一个参与者状态失败",
+				zap.String("room_id", roomID),
+				zap.String("uid", uid),
+				zap.Error(err),
+			)
+			// 这里不返回错误，因为主要操作已经完成
+		}
+	}
+
+	// 3. 发送业务 webhook 事件
+	if ps.businessWebhookService != nil {
+		// 构建事件数据
+		eventData := &models.ParticipantEventData{
+			RoomEventData: models.RoomEventData{
+				SourceChannelID:   room.SourceChannelID,
+				SourceChannelType: room.SourceChannelType,
+				RoomID:            room.RoomID,
+				Creator:           room.Creator,
+				RTCType:           room.RTCType,
+				InviteOn:          room.InviteOn,
+				Status:            room.Status,
+				MaxParticipants:   room.MaxParticipants,
+				CreatedAt:         room.CreatedAt.Unix(),
+				UpdatedAt:         time.Now().Unix(),
+			},
+			UID: uid, // 离开者是当前离开的参与者
+		}
+
+		// 发送一次 webhook 事件
+		if err := ps.businessWebhookService.SendEvent(models.BusinessEventParticipantLeft, eventData); err != nil {
+			logger.Error("发送业务 webhook 事件失败",
+				zap.String("room_id", roomID),
+				zap.String("event_type", models.BusinessEventParticipantLeft),
+				zap.Error(err),
+			)
+		}
+	}
+
+	logger.Info("参与者正常挂断",
+		zap.String("room_id", roomID),
+		zap.String("uid", uid),
+		zap.Int("max_participants", room.MaxParticipants),
+	)
+
 	return nil
 }
 
@@ -150,6 +470,19 @@ func (ps *ParticipantService) InviteParticipants(req *models.InviteParticipantRe
 			return errors.NewBusinessErrorWithKey(i18n.RoomNotFound, req.RoomID)
 		}
 		return errors.NewBusinessErrorWithKey(i18n.RoomQueryFailed, err.Error())
+	}
+
+	// 检查当前房间参与者人数（包括邀请中和已加入的）
+	var currentParticipantCount int64
+	if err := ps.db.Model(&models.Participant{}).
+		Where("room_id = ? AND status IN ?", req.RoomID, []int{models.ParticipantStatusInviting, models.ParticipantStatusJoined}).
+		Count(&currentParticipantCount).Error; err != nil {
+		return errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
+	}
+
+	// 检查邀请后是否会超过最大人数
+	if int(currentParticipantCount)+len(req.UIDs) > room.MaxParticipants {
+		return errors.NewBusinessErrorWithKey(i18n.RoomFull)
 	}
 
 	// 在事务中为每个 UID 创建参与者记录
@@ -173,28 +506,68 @@ func (ps *ParticipantService) InviteParticipants(req *models.InviteParticipantRe
 	return err
 }
 
-// CheckUserCallStatus 检查用户是否正在通话
-// 只查询 status=0(邀请中) 或 status=1(已加入) 的数据
-// 返回包含 roomID、uid、status 的用户通话状态列表
-func (ps *ParticipantService) CheckUserCallStatus(uids []string) ([]models.UserCallStatus, error) {
-	if len(uids) == 0 {
-		return []models.UserCallStatus{}, nil
+// GetUserAvailableRooms 获取用户可加入的房间列表
+// 查询该用户被邀请（status=0）或已加入（status=1）的所有房间
+// 返回 RoomResp 数组
+func (ps *ParticipantService) GetUserAvailableRooms(uid string) ([]models.RoomResp, error) {
+	// 查询用户的参与者记录（邀请中或已加入）
+	var participants []models.Participant
+	if err := ps.db.Where("uid = ? AND status IN ?", uid, []int{models.ParticipantStatusInviting, models.ParticipantStatusJoined}).
+		Find(&participants).Error; err != nil {
+		return nil, errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
 	}
 
-	var participants []models.Participant
-	// 查询 status=0(邀请中) 或 status=1(已加入) 的参与者
-	if err := ps.db.Where("uid IN ? AND (status = ? OR status = ?)", uids, models.ParticipantStatusInviting, models.ParticipantStatusJoined).
-		Find(&participants).Error; err != nil {
-		return nil, errors.NewBusinessErrorWithKey(i18n.ParticipantListQueryFailed, err.Error())
+	// 如果没有参与的房间，返回空数组
+	if len(participants) == 0 {
+		return []models.RoomResp{}, nil
+	}
+
+	// 提取所有房间 ID
+	roomIDs := make([]string, 0, len(participants))
+	for _, p := range participants {
+		roomIDs = append(roomIDs, p.RoomID)
+	}
+
+	// 查询所有房间信息（只查询未结束和未取消的房间）
+	var rooms []models.Room
+	if err := ps.db.Where("room_id IN ? AND status IN ?", roomIDs, []int{models.RoomStatusNotStarted, models.RoomStatusInProgress}).
+		Find(&rooms).Error; err != nil {
+		return nil, errors.NewBusinessErrorWithKey(i18n.RoomQueryFailed, err.Error())
 	}
 
 	// 构建返回结果
-	result := make([]models.UserCallStatus, 0, len(participants))
-	for _, p := range participants {
-		result = append(result, models.UserCallStatus{
-			RoomID: p.RoomID,
-			UID:    p.UID,
-			Status: p.Status,
+	result := make([]models.RoomResp, 0, len(rooms))
+	for _, room := range rooms {
+		// 为每个房间生成 Token
+		tokenResult, err := ps.tokenGenerator.GenerateTokenWithConfig(room.RoomID, uid)
+		if err != nil {
+			return nil, errors.NewBusinessErrorWithKey(i18n.TokenGenerationFailed, err.Error())
+		}
+
+		// 查询该房间的所有参与者 UIDs
+		var roomParticipants []models.Participant
+		if err := ps.db.Where("room_id = ?", room.RoomID).Find(&roomParticipants).Error; err != nil {
+			return nil, errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
+		}
+
+		uids := make([]string, 0, len(roomParticipants))
+		for _, p := range roomParticipants {
+			uids = append(uids, p.UID)
+		}
+
+		result = append(result, models.RoomResp{
+			SourceChannelID:   room.SourceChannelID,
+			SourceChannelType: room.SourceChannelType,
+			RoomID:            room.RoomID,
+			Creator:           room.Creator,
+			Token:             tokenResult.Token,
+			URL:               tokenResult.URL,
+			RTCType:           room.RTCType,
+			Status:            room.Status,
+			CreatedAt:         ps.timeFormatter.FormatDateTime(room.CreatedAt),
+			MaxParticipants:   room.MaxParticipants,
+			Timeout:           tokenResult.Timeout,
+			UIDs:              uids,
 		})
 	}
 

@@ -2,7 +2,6 @@ package handler
 
 import (
 	"net/http"
-	"time"
 
 	"tgo-rtc-server/internal/errors"
 	"tgo-rtc-server/internal/i18n"
@@ -90,12 +89,19 @@ func (ph *ParticipantHandler) JoinRoom(c *gin.Context) {
 	// 发送业务 webhook 事件
 	if ph.businessWebhookService != nil && resp != nil {
 		eventData := &models.ParticipantEventData{
-			RoomID:    req.RoomID,
-			UID:       req.UID,
-			Status:    models.ParticipantStatusJoined,
-			JoinTime:  time.Now().Unix(),
-			CreatedAt: time.Now().Unix(),
-			UpdatedAt: time.Now().Unix(),
+			RoomEventData: models.RoomEventData{
+				SourceChannelID:   resp.SourceChannelID,
+				SourceChannelType: resp.SourceChannelType,
+				RoomID:            resp.RoomID,
+				Creator:           resp.Creator,
+				RTCType:           resp.RTCType,
+				InviteOn:          0, // 从 resp 中无法获取，设为默认值
+				Status:            resp.Status,
+				MaxParticipants:   resp.MaxParticipants,
+				CreatedAt:         0, // 从 resp 中无法获取，设为默认值
+				UpdatedAt:         0, // 从 resp 中无法获取，设为默认值
+			},
+			UID: req.UID, // 加入者 UID
 		}
 		_ = ph.businessWebhookService.SendEvent(models.BusinessEventParticipantJoined, eventData)
 	}
@@ -211,16 +217,16 @@ func (ph *ParticipantHandler) InviteParticipants(c *gin.Context) {
 	c.JSON(http.StatusOK, nil)
 }
 
-// CheckUserCallStatus 查询正在通话的成员
-// POST /api/v1/participants/calling
-func (ph *ParticipantHandler) CheckUserCallStatus(c *gin.Context) {
+// GetUserAvailableRooms 同步用户可加入的房间列表
+// GET /api/v1/rooms/sync?uid=xxx
+func (ph *ParticipantHandler) GetUserAvailableRooms(c *gin.Context) {
 	lang := middleware.GetLanguageFromContext(c)
 	logger := utils.GetLogger()
 
-	var req models.CheckUserCallStatusRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		logger.Error("查询正在通话成员参数绑定失败",
-			zap.Error(err),
+	// 从 query 参数获取 uid
+	uid := c.Query("uid")
+	if uid == "" {
+		logger.Error("获取用户可加入房间列表参数缺失",
 			zap.String("language", lang),
 		)
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -230,12 +236,22 @@ func (ph *ParticipantHandler) CheckUserCallStatus(c *gin.Context) {
 		return
 	}
 
-	data, err := ph.participantService.CheckUserCallStatus(req.UIDs)
+	data, err := ph.participantService.GetUserAvailableRooms(uid)
 	if err != nil {
-		logger.Error("查询正在通话成员系统错误",
+		logger.Error("获取用户可加入房间列表失败",
 			zap.Error(err),
-			zap.Strings("uids", req.UIDs),
+			zap.String("uid", uid),
 		)
+
+		// 判断是否为业务错误
+		if businessErr, ok := err.(*errors.BusinessError); ok {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code": businessErr.Code,
+				"msg":  businessErr.Message,
+			})
+			return
+		}
+
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": 500,
 			"msg":  err.Error(),
@@ -243,9 +259,9 @@ func (ph *ParticipantHandler) CheckUserCallStatus(c *gin.Context) {
 		return
 	}
 
-	// 如果没有正在通话的用户，返回空数组而不是 nil
+	// 如果没有可加入的房间，返回空数组而不是 nil
 	if len(data) == 0 {
-		data = []models.UserCallStatus{}
+		data = []models.RoomResp{}
 	}
 
 	// 直接返回数组，不包装在 data 节点中

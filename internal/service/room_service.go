@@ -95,11 +95,11 @@ func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.Create
 		// 创建房间
 		room := models.Room{
 			SourceChannelID:   req.SourceChannelID,
-			SourceChannelType: int16(req.SourceChannelType),
+			SourceChannelType: req.SourceChannelType,
 			Creator:           req.Creator,
 			RoomID:            roomID,
-			RTCType:           int16(req.RTCType),
-			InviteOn:          int16(req.InviteOn),
+			RTCType:           req.RTCType,
+			InviteOn:          req.InviteOn,
 			Status:            models.RoomStatusNotStarted,
 			MaxParticipants:   maxParticipants,
 		}

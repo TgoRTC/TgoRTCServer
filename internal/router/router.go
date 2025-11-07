@@ -25,9 +25,9 @@ func SetupRouter(db *gorm.DB, redisClient *redis.Client, cfg *config.Config) *gi
 	tokenGenerator := livekit.NewTokenGenerator(cfg)
 
 	// 初始化服务层
-	roomService := service.NewRoomService(db, tokenGenerator)
-	participantService := service.NewParticipantService(db, tokenGenerator)
 	businessWebhookService := service.NewBusinessWebhookService(db, cfg)
+	roomService := service.NewRoomService(db, tokenGenerator)
+	participantService := service.NewParticipantService(db, tokenGenerator, businessWebhookService)
 
 	// 初始化处理器
 	roomHandler := handler.NewRoomHandler(roomService)
@@ -65,15 +65,10 @@ func SetupRouter(db *gorm.DB, redisClient *redis.Client, cfg *config.Config) *gi
 		rooms := api.Group("/rooms")
 		{
 			rooms.POST("", roomHandler.CreateRoom)                                // 创建房间
+			rooms.GET("/sync", participantHandler.GetUserAvailableRooms)          // 同步用户可加入的房间列表
 			rooms.POST("/:room_id/invite", participantHandler.InviteParticipants) // 邀请参与者
 			rooms.POST("/:room_id/join", participantHandler.JoinRoom)             // 加入房间
 			rooms.POST("/:room_id/leave", participantHandler.LeaveRoom)           // 离开房间
-		}
-
-		// 参与者相关接口
-		participants := api.Group("/participants")
-		{
-			participants.POST("/calling", participantHandler.CheckUserCallStatus) // 查询正在通话的成员
 		}
 
 		// Webhook 相关接口

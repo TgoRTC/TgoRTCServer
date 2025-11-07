@@ -33,6 +33,7 @@ const (
 
 	// 数据库操作错误
 	RoomQueryFailed         MessageKey = "room_query_failed"
+	RoomStatusUpdateFailed  MessageKey = "room_status_update_failed"
 	ParticipantAddFailed    MessageKey = "participant_add_failed"
 	TransactionCommitFailed MessageKey = "transaction_commit_failed"
 )
@@ -60,6 +61,7 @@ var Translations = map[string]map[MessageKey]string{
 		ParticipantListQueryFailed:    "查询参与者列表失败: %v",
 		ParticipantNotInvited:         "您未被邀请加入此房间",
 		RoomQueryFailed:               "查询房间失败: %v",
+		RoomStatusUpdateFailed:        "更新房间状态失败: %v",
 		ParticipantAddFailed:          "添加参与者失败: %v",
 		TransactionCommitFailed:       "提交事务失败: %v",
 	},
@@ -84,6 +86,7 @@ var Translations = map[string]map[MessageKey]string{
 		ParticipantListQueryFailed:    "查詢參與者列表失敗: %v",
 		ParticipantNotInvited:         "您未被邀請加入此房間",
 		RoomQueryFailed:               "查詢房間失敗: %v",
+		RoomStatusUpdateFailed:        "更新房間狀態失敗: %v",
 		ParticipantAddFailed:          "添加參與者失敗: %v",
 		TransactionCommitFailed:       "提交事務失敗: %v",
 	},
@@ -108,6 +111,7 @@ var Translations = map[string]map[MessageKey]string{
 		ParticipantListQueryFailed:    "Failed to query participant list: %v",
 		ParticipantNotInvited:         "You are not invited to join this room",
 		RoomQueryFailed:               "Failed to query room: %v",
+		RoomStatusUpdateFailed:        "Failed to update room status: %v",
 		ParticipantAddFailed:          "Failed to add participant: %v",
 		TransactionCommitFailed:       "Failed to commit transaction: %v",
 	},
@@ -132,6 +136,7 @@ var Translations = map[string]map[MessageKey]string{
 		ParticipantListQueryFailed:    "Échec de la requête de la liste des participants: %v",
 		ParticipantNotInvited:         "Vous n'êtes pas invité à rejoindre cette salle",
 		RoomQueryFailed:               "Échec de la requête de la salle: %v",
+		RoomStatusUpdateFailed:        "Échec de la mise à jour du statut de la salle: %v",
 		ParticipantAddFailed:          "Échec de l'ajout du participant: %v",
 		TransactionCommitFailed:       "Échec de la validation de la transaction: %v",
 	},
@@ -156,6 +161,7 @@ var Translations = map[string]map[MessageKey]string{
 		ParticipantListQueryFailed:    "参加者リストのクエリに失敗しました: %v",
 		ParticipantNotInvited:         "このルームへの招待を受けていません",
 		RoomQueryFailed:               "ルームのクエリに失敗しました: %v",
+		RoomStatusUpdateFailed:        "ルームステータスの更新に失敗しました: %v",
 		ParticipantAddFailed:          "参加者の追加に失敗しました: %v",
 		TransactionCommitFailed:       "トランザクションのコミットに失敗しました: %v",
 	},
