@@ -2,23 +2,25 @@ package database
 
 import (
 	"fmt"
-	"log"
 	"time"
 
+	"tgo-rtc-server/internal/utils"
+
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
 // Migration 迁移记录模型
 type Migration struct {
-	ID        int       `gorm:"primaryKey" json:"id"`
-	Version   string    `gorm:"column:version;size:50;not null;uniqueIndex" json:"version"`
-	Name      string    `gorm:"column:name;size:255;not null" json:"name"`
-	SQL       string    `gorm:"column:sql;type:longtext;not null" json:"sql"`
-	Status    string    `gorm:"column:status;size:20;not null;default:'pending'" json:"status"` // pending, success, failed
-	Error     string    `gorm:"column:error;type:text" json:"error"`
+	ID         int        `gorm:"primaryKey" json:"id"`
+	Version    string     `gorm:"column:version;size:50;not null;uniqueIndex" json:"version"`
+	Name       string     `gorm:"column:name;size:255;not null" json:"name"`
+	SQL        string     `gorm:"column:sql;type:longtext;not null" json:"sql"`
+	Status     string     `gorm:"column:status;size:20;not null;default:'pending'" json:"status"` // pending, success, failed
+	Error      string     `gorm:"column:error;type:text" json:"error"`
 	ExecutedAt *time.Time `gorm:"column:executed_at" json:"executed_at"`
-	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
-	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
+	CreatedAt  time.Time  `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	UpdatedAt  time.Time  `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 }
 
 // TableName 指定表名
@@ -41,17 +43,22 @@ func (mm *MigrationManager) InitMigrationTable() error {
 	if err := mm.db.AutoMigrate(&Migration{}); err != nil {
 		return fmt.Errorf("迁移表初始化失败: %w", err)
 	}
-	log.Println("✅ 迁移表初始化完成")
+	logger := utils.GetLogger()
+	logger.Info("✅ 迁移表初始化完成")
 	return nil
 }
 
 // ExecuteMigration 执行迁移
 func (mm *MigrationManager) ExecuteMigration(version, name, sql string) error {
 	// 检查迁移是否已执行
+	logger := utils.GetLogger()
 	var existingMigration Migration
 	if err := mm.db.Where("version = ?", version).First(&existingMigration).Error; err == nil {
 		if existingMigration.Status == "success" {
-			log.Printf("⏭️  迁移已执行，跳过: %s (%s)", version, name)
+			logger.Info("⏭️  迁移已执行，跳过",
+				zap.String("version", version),
+				zap.String("name", name),
+			)
 			return nil
 		}
 	}
@@ -69,8 +76,13 @@ func (mm *MigrationManager) ExecuteMigration(version, name, sql string) error {
 	}
 
 	// 执行 SQL
-	log.Printf("🔄 执行迁移: %s (%s)", version, name)
-	log.Printf("📝 SQL: %s", sql)
+	logger.Info("🔄 执行迁移",
+		zap.String("version", version),
+		zap.String("name", name),
+	)
+	logger.Info("📝 SQL",
+		zap.String("sql", sql),
+	)
 
 	if err := mm.db.Exec(sql).Error; err != nil {
 		// 更新迁移状态为失败
@@ -90,7 +102,10 @@ func (mm *MigrationManager) ExecuteMigration(version, name, sql string) error {
 		return fmt.Errorf("更新迁移状态失败: %w", err)
 	}
 
-	log.Printf("✅ 迁移执行成功: %s (%s)", version, name)
+	logger.Info("✅ 迁移执行成功",
+		zap.String("version", version),
+		zap.String("name", name),
+	)
 	return nil
 }
 
@@ -120,4 +135,3 @@ func (mm *MigrationManager) GetMigrationStatus() (map[string]interface{}, error)
 		"pending": total - successCount - failedCount,
 	}, nil
 }
-

@@ -2,12 +2,15 @@ package database
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+
+	"tgo-rtc-server/internal/utils"
+
+	"go.uber.org/zap"
 )
 
 // MigrationScript 迁移脚本结构
@@ -63,7 +66,10 @@ func LoadMigrations() ([]MigrationScript, error) {
 		// 提取 SQL 语句（去除注释和空行）
 		sql := extractSQL(string(content))
 		if sql == "" {
-			log.Printf("⚠️  警告: 文件 %s 中没有找到有效的 SQL 语句", entry.Name())
+			logger := utils.GetLogger()
+			logger.Warn("⚠️  警告: 文件中没有找到有效的 SQL 语句",
+				zap.String("file", entry.Name()),
+			)
 			continue
 		}
 
@@ -83,7 +89,10 @@ func LoadMigrations() ([]MigrationScript, error) {
 		return nil, fmt.Errorf("在 %s 目录中没有找到任何迁移脚本", migrationsDir)
 	}
 
-	log.Printf("✅ 成功加载 %d 个迁移脚本", len(scripts))
+	logger := utils.GetLogger()
+	logger.Info("✅ 成功加载迁移脚本",
+		zap.Int("count", len(scripts)),
+	)
 	return scripts, nil
 }
 

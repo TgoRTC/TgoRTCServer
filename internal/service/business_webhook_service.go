@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -16,22 +17,25 @@ import (
 	"tgo-rtc-server/internal/models"
 	"tgo-rtc-server/internal/utils"
 
+	"github.com/go-redis/redis/v8"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
 // BusinessWebhookService 业务 webhook 服务
 type BusinessWebhookService struct {
-	db     *gorm.DB
-	config *config.Config
-	client *http.Client
+	db          *gorm.DB
+	redisClient *redis.Client
+	config      *config.Config
+	client      *http.Client
 }
 
 // NewBusinessWebhookService 创建业务 webhook 服务
-func NewBusinessWebhookService(db *gorm.DB, cfg *config.Config) *BusinessWebhookService {
+func NewBusinessWebhookService(db *gorm.DB, redisClient *redis.Client, cfg *config.Config) *BusinessWebhookService {
 	return &BusinessWebhookService{
-		db:     db,
-		config: cfg,
+		db:          db,
+		redisClient: redisClient,
+		config:      cfg,
 		client: &http.Client{
 			Timeout: time.Duration(cfg.BusinessWebhookTimeout) * time.Second,
 		},
@@ -70,6 +74,68 @@ func (bws *BusinessWebhookService) SendEvent(eventType string, data interface{})
 	for _, webhookURL := range bws.config.BusinessWebhookURLs {
 		go bws.sendToURL(webhookURL, event, payload)
 	}
+
+	return nil
+}
+
+// SendRoomFinishedEventOnce 发送房间完成事件（确保同一个房间只发送一次）
+// 使用 Redis 记录已发送的房间ID，避免重复发送
+func (bws *BusinessWebhookService) SendRoomFinishedEventOnce(roomID string, data *models.RoomEventData) error {
+	logger := utils.GetLogger()
+
+	// 检查是否配置了业务 webhook URLs（如果没有配置则不发送）
+	if len(bws.config.BusinessWebhookURLs) == 0 {
+		return nil
+	}
+
+	// 构建 Redis key
+	redisKey := fmt.Sprintf("room:finished:sent:%s", roomID)
+
+	// 检查是否已经发送过
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	exists, err := bws.redisClient.Exists(ctx, redisKey).Result()
+	if err != nil {
+		logger.Error("检查 Redis key 失败",
+			zap.String("room_id", roomID),
+			zap.String("redis_key", redisKey),
+			zap.Error(err),
+		)
+		// Redis 失败不影响业务，继续发送
+	} else if exists > 0 {
+		// 已经发送过，跳过
+		logger.Info("房间完成事件已发送过，跳过",
+			zap.String("room_id", roomID),
+		)
+		return nil
+	}
+
+	// 发送事件
+	if err := bws.SendEvent(models.BusinessEventRoomFinished, data); err != nil {
+		logger.Error("发送房间完成事件失败",
+			zap.String("room_id", roomID),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	// 标记为已发送（设置 24 小时过期）
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel2()
+
+	if err := bws.redisClient.Set(ctx2, redisKey, "1", 24*time.Hour).Err(); err != nil {
+		logger.Warn("标记房间完成事件已发送失败",
+			zap.String("room_id", roomID),
+			zap.String("redis_key", redisKey),
+			zap.Error(err),
+		)
+		// 不返回错误，因为事件已经发送成功
+	}
+
+	logger.Info("✅ 房间完成事件已发送",
+		zap.String("room_id", roomID),
+	)
 
 	return nil
 }

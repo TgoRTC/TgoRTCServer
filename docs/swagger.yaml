@@ -302,15 +302,13 @@ paths:
 
         **房间事件：**
         - `room.started` - 房间已开始（第一个参与者加入时触发）
-        - `room.finished` - 房间已结束（所有参与者离开时触发）
-        - `room.cancelled` - 房间已取消（发起者在对方加入前取消）
+        - `room.finished` - 房间已结束（所有参与者离开或超时时触发）
 
         **参与者事件：**
         - `participant.joined` - 参与者已加入（参与者成功加入房间）
         - `participant.left` - 参与者已离开（参与者正常离开房间）
         - `participant.rejected` - 参与者已拒绝（参与者拒绝加入房间）
-        - `participant.timeout` - 参与者已超时（参与者未在规定时间内加入）
-        - `participant.missed` - 参与者已错过（参与者错过了通话）
+        - `participant.missed` - 参与者已超时（参与者未在规定时间内加入）
         - `participant.cancelled` - 参与者已取消（发起者取消了对参与者的邀请）
       requestBody:
         required: true
@@ -334,8 +332,29 @@ paths:
                     invite_on: 0
                     status: 1
                     max_participants: 2
+                    duration: 0
+                    uids: ["user_001"]
                     created_at: 1704096500
                     updated_at: 1704096600
+              room.finished:
+                summary: 房间已结束事件
+                value:
+                  event_type: "room.finished"
+                  event_id: "1704096900-xyz789"
+                  timestamp: 1704096900
+                  data:
+                    source_channel_id: "channel_001"
+                    source_channel_type: 0
+                    room_id: "room_abc123"
+                    creator: "user_001"
+                    rtc_type: 1
+                    invite_on: 0
+                    status: 2
+                    max_participants: 2
+                    duration: 300
+                    uids: ["user_001", "user_002"]
+                    created_at: 1704096500
+                    updated_at: 1704096900
               participant.joined:
                 summary: 参与者已加入事件
                 value:
@@ -351,6 +370,8 @@ paths:
                     invite_on: 0
                     status: 1
                     max_participants: 2
+                    duration: 0
+                    uids: ["user_001", "user_002"]
                     created_at: 1704096500
                     updated_at: 1704096700
                     uid: "user_002"
@@ -369,6 +390,8 @@ paths:
                     invite_on: 0
                     status: 2
                     max_participants: 2
+                    duration: 0
+                    uids: ["user_001", "user_002"]
                     created_at: 1704096500
                     updated_at: 1704096800
                     uid: "user_002"
@@ -652,11 +675,9 @@ components:
           enum:
             - room.started
             - room.finished
-            - room.cancelled
             - participant.joined
             - participant.left
             - participant.rejected
-            - participant.timeout
             - participant.missed
             - participant.cancelled
           example: "participant.joined"
@@ -677,7 +698,7 @@ components:
 
     RoomEventData:
       type: object
-      description: 房间事件数据（用于 room.started、room.finished、room.cancelled 事件）
+      description: 房间事件数据（用于 room.started、room.finished 事件）
       required:
         - source_channel_id
         - room_id
@@ -720,6 +741,17 @@ components:
           type: integer
           description: 最大参与者数量
           example: 2
+        duration:
+          type: integer
+          format: int64
+          description: 通话时长（秒），仅在 room.finished 事件中有值
+          example: 300
+        uids:
+          type: array
+          items:
+            type: string
+          description: 参与者 UID 列表
+          example: ["user_001", "user_002"]
         created_at:
           type: integer
           format: int64
@@ -733,7 +765,7 @@ components:
 
     ParticipantEventData:
       type: object
-      description: 参与者事件数据（用于 participant.joined、participant.left、participant.rejected、participant.timeout、participant.missed、participant.cancelled 事件）
+      description: 参与者事件数据（用于 participant.joined、participant.left、participant.rejected、participant.missed、participant.cancelled 事件）
       allOf:
         - $ref: '#/components/schemas/RoomEventData'
         - type: object

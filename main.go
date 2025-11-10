@@ -10,6 +10,7 @@ import (
 	"tgo-rtc-server/internal/utils"
 
 	"github.com/joho/godotenv"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -23,6 +24,8 @@ func main() {
 		log.Fatalf("日志初始化失败: %v", err)
 	}
 	defer utils.CloseLogger()
+
+	logger := utils.GetLogger()
 
 	// 初始化配置
 	cfg := config.LoadConfig()
@@ -39,11 +42,16 @@ func main() {
 		log.Fatalf("Redis 初始化失败: %v", err)
 	}
 
-	// 创建路由
-	r := router.SetupRouter(db, redisClient, cfg)
+	// 初始化业务 webhook 服务
+	businessWebhookService := service.NewBusinessWebhookService(db, redisClient, cfg)
+
+	// 创建路由（同时获取 participantService）
+	r, participantService := router.SetupRouter(db, redisClient, cfg, businessWebhookService)
 
 	// 启动参与者超时检查定时器
 	scheduler := service.NewSchedulerService(db, cfg)
+	scheduler.SetBusinessWebhookService(businessWebhookService)
+	scheduler.SetParticipantService(participantService)
 	scheduler.Start()
 	defer scheduler.Stop()
 
@@ -58,7 +66,9 @@ func main() {
 		port = "8080"
 	}
 
-	log.Printf("🚀 音视频服务启动在端口 %s", port)
+	logger.Info("🚀 音视频服务启动",
+		zap.String("port", port),
+	)
 	if err := r.Run(":" + port); err != nil {
 		log.Fatalf("启动服务器失败: %v", err)
 	}

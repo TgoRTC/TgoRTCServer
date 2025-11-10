@@ -233,37 +233,25 @@ func (ps *ParticipantService) handleCreatorCancelCall(roomID string) error {
 
 	// 3. 发送业务 webhook 事件（只发送一次）
 	if ps.businessWebhookService != nil {
-		// 构建事件数据
-		eventData := &models.ParticipantEventData{
-			RoomEventData: models.RoomEventData{
-				SourceChannelID:   room.SourceChannelID,
-				SourceChannelType: room.SourceChannelType,
-				RoomID:            room.RoomID,
-				Creator:           room.Creator,
-				RTCType:           room.RTCType,
-				InviteOn:          room.InviteOn,
-				Status:            models.RoomStatusCancelled,
-				MaxParticipants:   room.MaxParticipants,
-				CreatedAt:         room.CreatedAt.Unix(),
-				UpdatedAt:         time.Now().Unix(),
-			},
-			UID: room.Creator, // 取消者是房间创建者
-		}
-
-		// 发送一次 webhook 事件
-		if err := ps.businessWebhookService.SendEvent(models.BusinessEventParticipantCancelled, eventData); err != nil {
-			logger.Error("发送业务 webhook 事件失败",
+		var participants []models.Participant
+		if err := ps.db.Where("room_id = ?", roomID).Find(&participants).Error; err != nil {
+			logger.Error("查询参与者失败",
 				zap.String("room_id", roomID),
-				zap.String("event_type", models.BusinessEventParticipantCancelled),
 				zap.Error(err),
 			)
+			return errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
 		}
+		uids := make([]string, 0, len(participants))
+		for _, p := range participants {
+			uids = append(uids, p.UID)
+		}
+		ps.businessWebhookService.sendParticipantCancelled(&room, uids)
+		ps.businessWebhookService.checkAndFinishRoom(&room)
 	}
 
 	logger.Info("发起者取消通话成功",
 		zap.String("room_id", roomID),
 	)
-
 	return nil
 }
 
@@ -309,7 +297,8 @@ func (ps *ParticipantService) handleParticipantReject(roomID, uid string) error 
 			)
 			return errors.NewBusinessErrorWithKey(i18n.RoomStatusUpdateFailed, err.Error())
 		}
-
+		room.Status = models.RoomStatusRejected
+		room.UpdatedAt = time.Now()
 		// 2.2 更新另一个参与者状态为已拒绝
 		if err := ps.db.Model(&models.Participant{}).
 			Where("room_id = ? AND uid != ?", roomID, uid).
@@ -328,31 +317,8 @@ func (ps *ParticipantService) handleParticipantReject(roomID, uid string) error 
 
 	// 3. 发送业务 webhook 事件（不管多少人都发送）
 	if ps.businessWebhookService != nil {
-		// 构建事件数据
-		eventData := &models.ParticipantEventData{
-			RoomEventData: models.RoomEventData{
-				SourceChannelID:   room.SourceChannelID,
-				SourceChannelType: room.SourceChannelType,
-				RoomID:            room.RoomID,
-				Creator:           room.Creator,
-				RTCType:           room.RTCType,
-				InviteOn:          room.InviteOn,
-				Status:            room.Status,
-				MaxParticipants:   room.MaxParticipants,
-				CreatedAt:         room.CreatedAt.Unix(),
-				UpdatedAt:         time.Now().Unix(),
-			},
-			UID: uid, // 拒绝者是当前离开的参与者
-		}
-
-		// 发送一次 webhook 事件
-		if err := ps.businessWebhookService.SendEvent(models.BusinessEventParticipantRejected, eventData); err != nil {
-			logger.Error("发送业务 webhook 事件失败",
-				zap.String("room_id", roomID),
-				zap.String("event_type", models.BusinessEventParticipantRejected),
-				zap.Error(err),
-			)
-		}
+		ps.businessWebhookService.sendParticipantRejected(&room, uid)
+		ps.businessWebhookService.checkAndFinishRoom(&room)
 	}
 
 	logger.Info("参与者拒绝通话",
@@ -406,6 +372,8 @@ func (ps *ParticipantService) handleNormalHangup(roomID, uid string) error {
 			)
 			return errors.NewBusinessErrorWithKey(i18n.RoomStatusUpdateFailed, err.Error())
 		}
+		room.Status = models.RoomStatusFinished
+		room.UpdatedAt = time.Now()
 
 		// 2.2 更新另一个参与者状态为已挂断
 		if err := ps.db.Model(&models.Participant{}).
@@ -423,33 +391,9 @@ func (ps *ParticipantService) handleNormalHangup(roomID, uid string) error {
 		}
 	}
 
-	// 3. 发送业务 webhook 事件
 	if ps.businessWebhookService != nil {
-		// 构建事件数据
-		eventData := &models.ParticipantEventData{
-			RoomEventData: models.RoomEventData{
-				SourceChannelID:   room.SourceChannelID,
-				SourceChannelType: room.SourceChannelType,
-				RoomID:            room.RoomID,
-				Creator:           room.Creator,
-				RTCType:           room.RTCType,
-				InviteOn:          room.InviteOn,
-				Status:            room.Status,
-				MaxParticipants:   room.MaxParticipants,
-				CreatedAt:         room.CreatedAt.Unix(),
-				UpdatedAt:         time.Now().Unix(),
-			},
-			UID: uid, // 离开者是当前离开的参与者
-		}
-
-		// 发送一次 webhook 事件
-		if err := ps.businessWebhookService.SendEvent(models.BusinessEventParticipantLeft, eventData); err != nil {
-			logger.Error("发送业务 webhook 事件失败",
-				zap.String("room_id", roomID),
-				zap.String("event_type", models.BusinessEventParticipantLeft),
-				zap.Error(err),
-			)
-		}
+		// ps.businessWebhookService.sendParticipantLeft(&room, uid)
+		ps.businessWebhookService.checkAndFinishRoom(&room)
 	}
 
 	logger.Info("参与者正常挂断",

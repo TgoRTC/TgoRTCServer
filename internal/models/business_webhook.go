@@ -15,31 +15,31 @@ type BusinessWebhookEvent struct {
 // 业务事件类型常量
 const (
 	// 房间事件
-	BusinessEventRoomStarted   = "room.started"   // 房间已开始
-	BusinessEventRoomFinished  = "room.finished"  // 房间已结束
-	BusinessEventRoomCancelled = "room.cancelled" // 房间已取消
+	BusinessEventRoomStarted  = "room.started"  // 房间已开始
+	BusinessEventRoomFinished = "room.finished" // 房间已结束
 
 	// 参与者事件
 	BusinessEventParticipantJoined    = "participant.joined"    // 参与者已加入
 	BusinessEventParticipantLeft      = "participant.left"      // 参与者已离开
 	BusinessEventParticipantRejected  = "participant.rejected"  // 参与者已拒绝
-	BusinessEventParticipantTimeout   = "participant.timeout"   // 参与者已超时
-	BusinessEventParticipantMissed    = "participant.missed"    // 参与者已错过
+	BusinessEventParticipantMissed    = "participant.missed"    // 参与者已超时
 	BusinessEventParticipantCancelled = "participant.cancelled" // 参与者已取消
 )
 
 // RoomEventData 房间事件数据
 type RoomEventData struct {
-	SourceChannelID   string `json:"source_channel_id"`
-	SourceChannelType uint8  `json:"source_channel_type"`
-	RoomID            string `json:"room_id"`
-	Creator           string `json:"creator"`
-	RTCType           uint8  `json:"rtc_type"`         // 0: 语音, 1: 视频
-	InviteOn          uint8  `json:"invite_on"`        // 0: 否, 1: 是
-	Status            uint8  `json:"status"`           // 房间状态
-	MaxParticipants   int    `json:"max_participants"` // 最大参与者数
-	CreatedAt         int64  `json:"created_at"`
-	UpdatedAt         int64  `json:"updated_at"`
+	SourceChannelID   string   `json:"source_channel_id"`
+	SourceChannelType uint8    `json:"source_channel_type"`
+	RoomID            string   `json:"room_id"`
+	Creator           string   `json:"creator"`
+	RTCType           uint8    `json:"rtc_type"`         // 0: 语音, 1: 视频
+	InviteOn          uint8    `json:"invite_on"`        // 0: 否, 1: 是
+	Status            uint8    `json:"status"`           // 房间状态
+	MaxParticipants   int      `json:"max_participants"` // 最大参与者数
+	Duration          int64    `json:"duration"`         // 通话时长（秒）
+	Uids              []string `json:"uids"`             // 参与者uids
+	CreatedAt         int64    `json:"created_at"`
+	UpdatedAt         int64    `json:"updated_at"`
 }
 
 // ParticipantEventData 参与者事件数据

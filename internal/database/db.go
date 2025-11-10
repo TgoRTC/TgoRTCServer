@@ -2,11 +2,11 @@ package database
 
 import (
 	"fmt"
-	"log"
 	"strings"
 
 	"tgo-rtc-server/internal/config"
 	"tgo-rtc-server/internal/models"
+	"tgo-rtc-server/internal/utils"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -57,7 +57,8 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 		}
 	}
 
-	log.Println("✅ 数据库连接成功")
+	logger := utils.GetLogger()
+	logger.Info("✅ 数据库连接成功")
 
 	// 初始化迁移管理器
 	mm := NewMigrationManager(db)
@@ -72,7 +73,7 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 		return nil, fmt.Errorf("运行迁移脚本失败: %w", err)
 	}
 
-	log.Println("✅ 数据库迁移完成")
+	logger.Info("✅ 数据库迁移完成")
 
 	// 自动迁移（用于其他模型）
 	if err := db.AutoMigrate(&models.Room{}, &models.Participant{}); err != nil {

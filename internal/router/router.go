@@ -15,7 +15,8 @@ import (
 )
 
 // SetupRouter 设置路由
-func SetupRouter(db *gorm.DB, redisClient *redis.Client, cfg *config.Config) *gin.Engine {
+// 返回 gin.Engine 和 participantService（用于 scheduler）
+func SetupRouter(db *gorm.DB, redisClient *redis.Client, cfg *config.Config, businessWebhookService *service.BusinessWebhookService) (*gin.Engine, *service.ParticipantService) {
 	router := gin.Default()
 
 	// 添加多语言中间件
@@ -25,7 +26,6 @@ func SetupRouter(db *gorm.DB, redisClient *redis.Client, cfg *config.Config) *gi
 	tokenGenerator := livekit.NewTokenGenerator(cfg)
 
 	// 初始化服务层
-	businessWebhookService := service.NewBusinessWebhookService(db, cfg)
 	roomService := service.NewRoomService(db, tokenGenerator)
 	participantService := service.NewParticipantService(db, tokenGenerator, businessWebhookService)
 
@@ -80,5 +80,5 @@ func SetupRouter(db *gorm.DB, redisClient *redis.Client, cfg *config.Config) *gi
 		}
 	}
 
-	return router
+	return router, participantService
 }

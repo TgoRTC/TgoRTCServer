@@ -149,26 +149,7 @@ func (ws *WebhookService) handleRoomStarted(event *models.WebhookEvent) error {
 
 	// 2、通知业务的webhook
 	if ws.businessWebhookService != nil {
-		eventData := &models.RoomEventData{
-			SourceChannelID:   room.SourceChannelID,
-			SourceChannelType: room.SourceChannelType,
-			RoomID:            room.RoomID,
-			Creator:           room.Creator,
-			RTCType:           room.RTCType,
-			InviteOn:          room.InviteOn,
-			Status:            models.RoomStatusInProgress,
-			MaxParticipants:   room.MaxParticipants,
-			CreatedAt:         room.CreatedAt.Unix(),
-			UpdatedAt:         room.UpdatedAt.Unix(),
-		}
-		if err := ws.businessWebhookService.SendEvent(models.BusinessEventRoomStarted, eventData); err != nil {
-			logger.Error("发送业务 webhook 事件失败",
-				zap.String("room_id", room.RoomID),
-				zap.String("event_type", models.BusinessEventRoomStarted),
-				zap.Error(err),
-			)
-			// 不返回错误，因为房间状态已经更新成功
-		}
+		ws.businessWebhookService.sendRoomStarted(&room)
 	}
 
 	return nil
@@ -177,7 +158,6 @@ func (ws *WebhookService) handleRoomStarted(event *models.WebhookEvent) error {
 // handleRoomFinished 处理房间结束事件
 func (ws *WebhookService) handleRoomFinished(event *models.WebhookEvent) error {
 	logger := utils.GetLogger()
-
 	if event.Room == nil {
 		return nil
 	}
@@ -225,28 +205,9 @@ func (ws *WebhookService) handleRoomFinished(event *models.WebhookEvent) error {
 
 	// 2、通知业务的 webhook
 	if ws.businessWebhookService != nil {
-		eventData := &models.RoomEventData{
-			SourceChannelID:   room.SourceChannelID,
-			SourceChannelType: room.SourceChannelType,
-			RoomID:            room.RoomID,
-			Creator:           room.Creator,
-			RTCType:           room.RTCType,
-			InviteOn:          room.InviteOn,
-			Status:            models.RoomStatusFinished,
-			MaxParticipants:   room.MaxParticipants,
-			CreatedAt:         room.CreatedAt.Unix(),
-			UpdatedAt:         room.UpdatedAt.Unix(),
-		}
-		if err := ws.businessWebhookService.SendEvent(models.BusinessEventRoomFinished, eventData); err != nil {
-			logger.Error("发送业务 webhook 事件失败",
-				zap.String("room_id", room.RoomID),
-				zap.String("event_type", models.BusinessEventRoomFinished),
-				zap.Error(err),
-			)
-			// 不返回错误，因为房间状态已经更新成功
-		}
+		ws.businessWebhookService.checkAndFinishRoom(&room)
+		// ws.businessWebhookService.sendRoomFinished(&room)
 	}
-
 	return nil
 }
 
@@ -324,33 +285,8 @@ func (ws *WebhookService) handleParticipantJoined(event *models.WebhookEvent) er
 				zap.Error(err),
 			)
 		} else {
+			ws.businessWebhookService.sendParticipantJoined(&room, participant.UID)
 			// 构建事件数据
-			eventData := &models.ParticipantEventData{
-				RoomEventData: models.RoomEventData{
-					SourceChannelID:   room.SourceChannelID,
-					SourceChannelType: room.SourceChannelType,
-					RoomID:            room.RoomID,
-					Creator:           room.Creator,
-					RTCType:           room.RTCType,
-					InviteOn:          room.InviteOn,
-					Status:            room.Status,
-					MaxParticipants:   room.MaxParticipants,
-					CreatedAt:         room.CreatedAt.Unix(),
-					UpdatedAt:         room.UpdatedAt.Unix(),
-				},
-				UID: participant.UID, // 加入者 UID
-			}
-
-			// 发送 webhook 事件
-			if err := ws.businessWebhookService.SendEvent(models.BusinessEventParticipantJoined, eventData); err != nil {
-				logger.Error("发送业务 webhook 事件失败",
-					zap.String("room_id", participant.RoomID),
-					zap.String("uid", participant.UID),
-					zap.String("event_type", models.BusinessEventParticipantJoined),
-					zap.Error(err),
-				)
-				// 不返回错误，因为参与者状态已经更新成功
-			}
 		}
 	}
 
@@ -402,13 +338,16 @@ func (ws *WebhookService) handleParticipantLeft(event *models.WebhookEvent) erro
 		)
 		return err
 	}
-
+	// 如果房间已经结束或取消，则跳过
+	if room.Status > models.RoomStatusInProgress {
+		return nil
+	}
 	// 2、检查是否需要标记房间为已结束
-	shouldFinishRoom := false
+	// shouldFinishRoom := false
 
 	// 情况1：房间的 max_participants=2，则标记房间已经结束
 	if room.MaxParticipants == 2 {
-		shouldFinishRoom = true
+		// shouldFinishRoom = true
 		logger.Info("房间为双人通话，标记房间已结束",
 			zap.String("room_id", event.Room.Name),
 			zap.Int("max_participants", room.MaxParticipants),
@@ -427,63 +366,11 @@ func (ws *WebhookService) handleParticipantLeft(event *models.WebhookEvent) erro
 				zap.String("room_id", event.Room.Name),
 			)
 		}
-	} else {
-		// 情况2：检查房间中是否所有参与者都已离开（status=3）
-		var activeParticipantCount int64
-		if err := ws.db.Where("room_id = ? AND status IN (?, ?)", event.Room.Name, models.ParticipantStatusInviting, models.ParticipantStatusJoined).
-			Count(&activeParticipantCount).Error; err != nil {
-			logger.Error("查询活跃参与者数失败",
-				zap.String("room_id", event.Room.Name),
-				zap.Error(err),
-			)
-		} else if activeParticipantCount == 0 {
-			shouldFinishRoom = true
-			logger.Info("房间中所有参与者都已离开，标记房间已结束",
-				zap.String("room_id", event.Room.Name),
-			)
-		}
 	}
-
-	// 如果需要标记房间为已结束，则更新房间状态
-	if shouldFinishRoom && room.Status != models.RoomStatusFinished {
-		if err := ws.db.Model(&room).Update("status", models.RoomStatusFinished).Error; err != nil {
-			logger.Error("更新房间状态为已结束失败",
-				zap.String("room_id", event.Room.Name),
-				zap.Error(err),
-			)
-		} else {
-			logger.Info("房间状态已更新为已结束",
-				zap.String("room_id", event.Room.Name),
-			)
-		}
-	}
-
 	// 3、通知业务的 webhook
 	if ws.businessWebhookService != nil {
-		eventData := &models.ParticipantEventData{
-			RoomEventData: models.RoomEventData{
-				SourceChannelID:   room.SourceChannelID,
-				SourceChannelType: room.SourceChannelType,
-				RoomID:            room.RoomID,
-				Creator:           room.Creator,
-				RTCType:           room.RTCType,
-				InviteOn:          room.InviteOn,
-				Status:            room.Status,
-				MaxParticipants:   room.MaxParticipants,
-				CreatedAt:         room.CreatedAt.Unix(),
-				UpdatedAt:         room.UpdatedAt.Unix(),
-			},
-			UID: leftParticipant.UID, // 离开者 UID
-		}
-		if err := ws.businessWebhookService.SendEvent(models.BusinessEventParticipantLeft, eventData); err != nil {
-			logger.Error("发送业务 webhook 事件失败",
-				zap.String("room_id", leftParticipant.RoomID),
-				zap.String("uid", leftParticipant.UID),
-				zap.String("event_type", models.BusinessEventParticipantLeft),
-				zap.Error(err),
-			)
-			// 不返回错误，因为参与者状态已经更新成功
-		}
+		ws.businessWebhookService.sendParticipantLeft(&room, leftParticipant.UID)
+		ws.businessWebhookService.checkAndFinishRoom(&room)
 	}
 
 	return nil

@@ -3,11 +3,12 @@ package database
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
-	"github.com/go-redis/redis/v8"
 	"tgo-rtc-server/internal/config"
+	"tgo-rtc-server/internal/utils"
+
+	"github.com/go-redis/redis/v8"
 )
 
 // InitRedis 初始化 Redis 连接
@@ -26,8 +27,8 @@ func InitRedis(cfg *config.Config) (*redis.Client, error) {
 		return nil, fmt.Errorf("Redis 连接失败: %w", err)
 	}
 
-	log.Println("✅ Redis 连接成功")
+	logger := utils.GetLogger()
+	logger.Info("✅ Redis 连接成功")
 
 	return client, nil
 }
-
