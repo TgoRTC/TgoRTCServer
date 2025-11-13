@@ -31,6 +31,8 @@ const (
 	RoomStatusFinished   = 2 // 已结束
 	RoomStatusCancelled  = 3 // 已取消
 	RoomStatusRejected   = 4 // 已拒绝
+	RoomStatusBusy       = 5 // 通话中未接听
+	RoomStatusMissed     = 6 // 超时未加入
 )
 
 // RTCType 呼叫类型常量

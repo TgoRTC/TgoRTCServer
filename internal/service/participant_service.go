@@ -125,10 +125,14 @@ func (ps *ParticipantService) JoinRoom(req *models.JoinRoomRequest) (*models.Joi
 
 // LeaveRoom 参与者离开房间
 func (ps *ParticipantService) LeaveRoom(req *models.LeaveRoomRequest) error {
+	logger := utils.GetLogger()
 	// 检查房间是否存在
 	var room models.Room
 	if err := ps.db.Where("room_id = ?", req.RoomID).First(&room).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
+			logger.Error("离开房间，未查询到房间信息",
+				zap.String("room_id", req.RoomID),
+			)
 			return errors.NewBusinessErrorWithKey(i18n.RoomNotFound, req.RoomID)
 		}
 		return errors.NewBusinessErrorWithKey(i18n.RoomQueryFailed, err.Error())
@@ -136,32 +140,54 @@ func (ps *ParticipantService) LeaveRoom(req *models.LeaveRoomRequest) error {
 
 	// 查询当前参与者的状态
 	var currentParticipant models.Participant
-	if err := ps.db.Where("room_id = ? AND uid = ?", req.RoomID, req.UID).First(&currentParticipant).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return errors.NewBusinessErrorWithKey(i18n.ParticipantNotFound, req.UID)
-		}
-		return errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
-	}
+	// if err := ps.db.Where("room_id = ? AND uid = ?", req.RoomID, req.UID).First(&currentParticipant).Error; err != nil {
+	// 	if err == gorm.ErrRecordNotFound {
+	// 		logger.Error("离开房间，未查询到参与者信息",
+	// 			zap.String("room_id", req.RoomID),
+	// 			zap.String("uid", req.UID),
+	// 		)
+	// 		return errors.NewBusinessErrorWithKey(i18n.ParticipantNotFound, req.UID)
+	// 	}
+	// 	return errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
+	// }
 
 	// 查询所有参与者
 	var allParticipants []models.Participant
 	if err := ps.db.Where("room_id = ?", req.RoomID).Find(&allParticipants).Error; err != nil {
+		logger.Error("离开房间，查询参所有参与者错误",
+			zap.String("room_id", req.RoomID),
+			zap.Error(err),
+		)
 		return errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
 	}
 
 	// 判断是否为一对一通话（MaxParticipants = 2）
 	isOneToOne := room.MaxParticipants == 2
 	isCreator := room.Creator == req.UID
-	hasJoined := currentParticipant.Status == models.ParticipantStatusJoined
-
-	// 统计已加入的参与者数量
+	hasJoined := false
 	joinedCount := 0
+	uids := make([]string, 0, len(allParticipants))
 	for _, p := range allParticipants {
-		if p.Status == models.ParticipantStatusJoined {
+		if p.UID == req.UID {
+			currentParticipant = p
+		}
+		uids = append(uids, p.UID)
+		if p.Status == models.ParticipantStatusJoined || p.Status == models.ParticipantStatusHangup {
 			joinedCount++
 		}
 	}
-
+	if currentParticipant.ID == 0 {
+		logger.Error("离开房间，未查询到参与者信息",
+			zap.String("room_id", req.RoomID),
+			zap.String("uid", req.UID),
+		)
+		return errors.NewBusinessErrorWithKey(i18n.ParticipantNotFound, req.UID)
+	}
+	//
+	if currentParticipant.Status == models.ParticipantStatusJoined || currentParticipant.LeaveTime > 0 {
+		hasJoined = true
+	}
+	// 统计已加入的参与者数量
 	if isOneToOne {
 		// 一对一通话场景（MaxParticipants = 2）
 		if isCreator {
@@ -169,7 +195,7 @@ func (ps *ParticipantService) LeaveRoom(req *models.LeaveRoomRequest) error {
 			switch joinedCount {
 			case 1:
 				// 只有发起者自己加入，对方还未加入 -> 取消通话
-				return ps.handleCreatorCancelCall(req.RoomID)
+				return ps.handleCreatorCancelCall(&room, uids)
 			case 2:
 				// 情况3：双方都已加入 -> 结束通话挂断（走默认逻辑）
 			}
@@ -177,7 +203,7 @@ func (ps *ParticipantService) LeaveRoom(req *models.LeaveRoomRequest) error {
 			// 情况2：非发起者离开（对方拒绝通话或挂断）
 			if !hasJoined {
 				// 对方还未加入就离开 -> 拒绝通话
-				return ps.handleParticipantReject(req.RoomID, req.UID)
+				return ps.handleParticipantReject(&room, req.UID, uids)
 			}
 			// 情况3：双方都已加入 -> 结束通话挂断（走默认逻辑）
 		}
@@ -185,47 +211,40 @@ func (ps *ParticipantService) LeaveRoom(req *models.LeaveRoomRequest) error {
 		// 多人通话场景（MaxParticipants > 2）
 		if !hasJoined {
 			// 情况4：参与者未加入就离开 -> 拒绝通话
-			return ps.handleParticipantReject(req.RoomID, req.UID)
+			return ps.handleParticipantReject(&room, req.UID, uids)
 		}
 		// 情况4：参与者已加入后离开 -> 正常挂断（走默认逻辑）
 	}
 
 	// 默认处理：正常挂断（情况3和情况4b）
-	return ps.handleNormalHangup(req.RoomID, req.UID)
+	return ps.handleNormalHangup(&room, req.UID, uids)
 }
 
 // handleCreatorCancelCall 处理发起者取消通话（情况1）
 // 发起者主动挂断，对方还未加入 -> 取消通话
-func (ps *ParticipantService) handleCreatorCancelCall(roomID string) error {
+func (ps *ParticipantService) handleCreatorCancelCall(room *models.Room, uids []string) error {
 	logger := utils.GetLogger()
-
-	// 查询房间信息
-	var room models.Room
-	if err := ps.db.Where("room_id = ?", roomID).First(&room).Error; err != nil {
-		logger.Error("查询房间信息失败",
-			zap.String("room_id", roomID),
-			zap.Error(err),
-		)
-		return errors.NewBusinessErrorWithKey(i18n.RoomQueryFailed, err.Error())
-	}
-
+	logger.Info("发起者取消通话",
+		zap.String("room_id", room.RoomID),
+	)
 	// 1. 更新房间状态为已取消
 	if err := ps.db.Model(&models.Room{}).
-		Where("room_id = ?", roomID).
+		Where("room_id = ?", room.RoomID).
 		Update("status", models.RoomStatusCancelled).Error; err != nil {
 		logger.Error("更新房间状态失败",
-			zap.String("room_id", roomID),
+			zap.String("room_id", room.RoomID),
 			zap.Error(err),
 		)
+		room.Status = models.RoomStatusCancelled
 		return errors.NewBusinessErrorWithKey(i18n.RoomStatusUpdateFailed, err.Error())
 	}
 
 	// 2. 更新所有参与者状态为已取消
 	if err := ps.db.Model(&models.Participant{}).
-		Where("room_id = ?", roomID).
+		Where("room_id = ?", room.RoomID).
 		Update("status", models.ParticipantStatusCancelled).Error; err != nil {
 		logger.Error("更新参与者状态失败",
-			zap.String("room_id", roomID),
+			zap.String("room_id", room.RoomID),
 			zap.Error(err),
 		)
 		return errors.NewBusinessErrorWithKey(i18n.ParticipantStatusUpdateFailed, err.Error())
@@ -233,52 +252,34 @@ func (ps *ParticipantService) handleCreatorCancelCall(roomID string) error {
 
 	// 3. 发送业务 webhook 事件（只发送一次）
 	if ps.businessWebhookService != nil {
-		var participants []models.Participant
-		if err := ps.db.Where("room_id = ?", roomID).Find(&participants).Error; err != nil {
-			logger.Error("查询参与者失败",
-				zap.String("room_id", roomID),
-				zap.Error(err),
-			)
-			return errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
-		}
-		uids := make([]string, 0, len(participants))
-		for _, p := range participants {
-			uids = append(uids, p.UID)
-		}
-		ps.businessWebhookService.sendParticipantCancelled(&room, uids)
-		ps.businessWebhookService.checkAndFinishRoom(&room)
+		ps.businessWebhookService.sendParticipantCancelled(room, uids)
+		logger.Info("发送参与者取消事件成功",
+			zap.String("room_id", room.RoomID),
+			zap.Int("room_status", int(room.Status)),
+		)
+		ps.businessWebhookService.checkAndFinishRoom(room)
 	}
-
-	logger.Info("发起者取消通话成功",
-		zap.String("room_id", roomID),
-	)
 	return nil
 }
 
 // handleParticipantReject 处理参与者拒绝通话（情况2和情况4）
 // 参与者未加入就离开 -> 拒绝通话
-func (ps *ParticipantService) handleParticipantReject(roomID, uid string) error {
+func (ps *ParticipantService) handleParticipantReject(room *models.Room, uid string, uids []string) error {
 	logger := utils.GetLogger()
-
-	// 查询房间信息
-	var room models.Room
-	if err := ps.db.Where("room_id = ?", roomID).First(&room).Error; err != nil {
-		logger.Error("查询房间信息失败",
-			zap.String("room_id", roomID),
-			zap.Error(err),
-		)
-		return errors.NewBusinessErrorWithKey(i18n.RoomQueryFailed, err.Error())
-	}
+	logger.Info("参与者拒绝通话",
+		zap.String("room_id", room.RoomID),
+		zap.String("uid", uid),
+	)
 
 	// 1. 更新当前参与者状态为已拒绝
 	if err := ps.db.Model(&models.Participant{}).
-		Where("room_id = ? AND uid = ?", roomID, uid).
+		Where("room_id = ? AND uid = ?", room.RoomID, uid).
 		Updates(map[string]interface{}{
-			"status":     models.ParticipantStatusRejected,
-			"leave_time": time.Now().Unix(),
+			"status": models.ParticipantStatusRejected,
+			//"leave_time": time.Now().Unix(),
 		}).Error; err != nil {
-		logger.Error("更新参与者状态失败",
-			zap.String("room_id", roomID),
+		logger.Error("更新参与者状态未拒绝错误",
+			zap.String("room_id", room.RoomID),
 			zap.String("uid", uid),
 			zap.Error(err),
 		)
@@ -289,10 +290,10 @@ func (ps *ParticipantService) handleParticipantReject(roomID, uid string) error 
 	if room.MaxParticipants == 2 {
 		// 2.1 更新房间状态为已拒绝
 		if err := ps.db.Model(&models.Room{}).
-			Where("room_id = ?", roomID).
+			Where("room_id = ?", room.RoomID).
 			Update("status", models.RoomStatusRejected).Error; err != nil {
-			logger.Error("更新房间状态失败",
-				zap.String("room_id", roomID),
+			logger.Error("更新房间状态为拒绝失败",
+				zap.String("room_id", room.RoomID),
 				zap.Error(err),
 			)
 			return errors.NewBusinessErrorWithKey(i18n.RoomStatusUpdateFailed, err.Error())
@@ -301,13 +302,13 @@ func (ps *ParticipantService) handleParticipantReject(roomID, uid string) error 
 		room.UpdatedAt = time.Now()
 		// 2.2 更新另一个参与者状态为已拒绝
 		if err := ps.db.Model(&models.Participant{}).
-			Where("room_id = ? AND uid != ?", roomID, uid).
+			Where("room_id = ? AND uid != ?", room.RoomID, uid).
 			Updates(map[string]interface{}{
-				"status":     models.ParticipantStatusRejected,
-				"leave_time": time.Now().Unix(),
+				"status": models.ParticipantStatusRejected,
+				//"leave_time": time.Now().Unix(),
 			}).Error; err != nil {
-			logger.Error("更新另一个参与者状态失败",
-				zap.String("room_id", roomID),
+			logger.Error("更新另一个参与者状态为拒绝失败",
+				zap.String("room_id", room.RoomID),
 				zap.String("uid", uid),
 				zap.Error(err),
 			)
@@ -317,43 +318,30 @@ func (ps *ParticipantService) handleParticipantReject(roomID, uid string) error 
 
 	// 3. 发送业务 webhook 事件（不管多少人都发送）
 	if ps.businessWebhookService != nil {
-		ps.businessWebhookService.sendParticipantRejected(&room, uid)
-		ps.businessWebhookService.checkAndFinishRoom(&room)
+		ps.businessWebhookService.sendParticipantRejected(room, uid, uids)
+		ps.businessWebhookService.checkAndFinishRoom(room)
 	}
-
-	logger.Info("参与者拒绝通话",
-		zap.String("room_id", roomID),
-		zap.String("uid", uid),
-		zap.Int("max_participants", room.MaxParticipants),
-	)
-
 	return nil
 }
 
 // handleNormalHangup 处理正常挂断（情况3和情况4）
 // 参与者已加入后离开 -> 正常挂断
-func (ps *ParticipantService) handleNormalHangup(roomID, uid string) error {
+func (ps *ParticipantService) handleNormalHangup(room *models.Room, uid string, uids []string) error {
 	logger := utils.GetLogger()
-
-	// 查询房间信息
-	var room models.Room
-	if err := ps.db.Where("room_id = ?", roomID).First(&room).Error; err != nil {
-		logger.Error("查询房间信息失败",
-			zap.String("room_id", roomID),
-			zap.Error(err),
-		)
-		return errors.NewBusinessErrorWithKey(i18n.RoomQueryFailed, err.Error())
-	}
+	logger.Info("参与者正常挂断",
+		zap.String("room_id", room.RoomID),
+		zap.String("uid", uid),
+	)
 
 	// 1. 更新当前参与者状态为已挂断
 	if err := ps.db.Model(&models.Participant{}).
-		Where("room_id = ? AND uid = ?", roomID, uid).
+		Where("room_id = ? AND uid = ?", room.RoomID, uid).
 		Updates(map[string]interface{}{
 			"status":     models.ParticipantStatusHangup,
 			"leave_time": time.Now().Unix(),
 		}).Error; err != nil {
 		logger.Error("更新参与者状态失败",
-			zap.String("room_id", roomID),
+			zap.String("room_id", room.RoomID),
 			zap.String("uid", uid),
 			zap.Error(err),
 		)
@@ -364,10 +352,10 @@ func (ps *ParticipantService) handleNormalHangup(roomID, uid string) error {
 	if room.MaxParticipants == 2 {
 		// 2.1 更新房间状态为已结束
 		if err := ps.db.Model(&models.Room{}).
-			Where("room_id = ?", roomID).
+			Where("room_id = ?", room.RoomID).
 			Update("status", models.RoomStatusFinished).Error; err != nil {
-			logger.Error("更新房间状态失败",
-				zap.String("room_id", roomID),
+			logger.Error("更新房间状态为挂断错误",
+				zap.String("room_id", room.RoomID),
 				zap.Error(err),
 			)
 			return errors.NewBusinessErrorWithKey(i18n.RoomStatusUpdateFailed, err.Error())
@@ -377,13 +365,13 @@ func (ps *ParticipantService) handleNormalHangup(roomID, uid string) error {
 
 		// 2.2 更新另一个参与者状态为已挂断
 		if err := ps.db.Model(&models.Participant{}).
-			Where("room_id = ? AND uid != ?", roomID, uid).
+			Where("room_id = ? AND uid != ?", room.RoomID, uid).
 			Updates(map[string]interface{}{
 				"status":     models.ParticipantStatusHangup,
 				"leave_time": time.Now().Unix(),
 			}).Error; err != nil {
-			logger.Error("更新另一个参与者状态失败",
-				zap.String("room_id", roomID),
+			logger.Error("更新另一个参与者状态为挂断失败",
+				zap.String("room_id", room.RoomID),
 				zap.String("uid", uid),
 				zap.Error(err),
 			)
@@ -393,15 +381,8 @@ func (ps *ParticipantService) handleNormalHangup(roomID, uid string) error {
 
 	if ps.businessWebhookService != nil {
 		// ps.businessWebhookService.sendParticipantLeft(&room, uid)
-		ps.businessWebhookService.checkAndFinishRoom(&room)
+		ps.businessWebhookService.checkAndFinishRoom(room)
 	}
-
-	logger.Info("参与者正常挂断",
-		zap.String("room_id", roomID),
-		zap.String("uid", uid),
-		zap.Int("max_participants", room.MaxParticipants),
-	)
-
 	return nil
 }
 

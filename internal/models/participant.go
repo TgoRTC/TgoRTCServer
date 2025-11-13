@@ -9,7 +9,7 @@ type Participant struct {
 	ID        int       `gorm:"primaryKey" json:"id"`
 	RoomID    string    `gorm:"column:room_id;size:40;not null;default:'';index:idx_room_uid,unique" json:"room_id"`
 	UID       string    `gorm:"column:uid;size:40;not null;default:'';index:idx_uid;index:idx_room_uid,unique" json:"uid"`
-	Status    int16     `gorm:"column:status;not null;default:0" json:"status"` // 0-6: 见常量定义
+	Status    uint8     `gorm:"column:status;not null;default:0" json:"status"` // 0-6: 见常量定义
 	JoinTime  int64     `gorm:"column:join_time;not null;default:0" json:"join_time"`
 	LeaveTime int64     `gorm:"column:leave_time;not null;default:0" json:"leave_time"`
 	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
@@ -27,8 +27,8 @@ const (
 	ParticipantStatusJoined    = 1 // 已加入
 	ParticipantStatusRejected  = 2 // 已拒绝
 	ParticipantStatusHangup    = 3 // 已挂断
-	ParticipantStatusTimeout   = 4 // 超时未加入
-	ParticipantStatusMissed    = 5 // 通话中未接听
+	ParticipantStatusMissed    = 4 // 超时未加入
+	ParticipantStatusBusy      = 5 // 通话中未接听
 	ParticipantStatusCancelled = 6 // 已取消
 )
 

@@ -1,10 +1,7 @@
 package handler
 
 import (
-	"net/http"
-
 	"tgo-rtc-server/internal/errors"
-	"tgo-rtc-server/internal/i18n"
 	"tgo-rtc-server/internal/middleware"
 	"tgo-rtc-server/internal/models"
 	"tgo-rtc-server/internal/service"
@@ -47,10 +44,7 @@ func (ph *ParticipantHandler) JoinRoom(c *gin.Context) {
 			zap.String("uid", req.UID),
 			zap.String("language", lang),
 		)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code": 400,
-			"msg":  i18n.Translate(lang, i18n.InvalidParameters),
-		})
+		utils.RespondWithBindError(c)
 		return
 	}
 
@@ -67,10 +61,6 @@ func (ph *ParticipantHandler) JoinRoom(c *gin.Context) {
 				zap.String("uid", req.UID),
 				zap.String("language", lang),
 			)
-			c.JSON(http.StatusBadRequest, gin.H{
-				"code": 400,
-				"msg":  businessErr.GetLocalizedMessage(lang),
-			})
 		} else {
 			logger.Error("加入房间系统错误",
 				zap.Error(err),
@@ -78,13 +68,20 @@ func (ph *ParticipantHandler) JoinRoom(c *gin.Context) {
 				zap.String("uid", req.UID),
 				zap.String("language", lang),
 			)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"code": 500,
-				"msg":  err.Error(),
-			})
 		}
+		utils.RespondWithBusinessError(c, err)
 		return
 	}
+
+	// 记录参与者加入成功和 LiveKit 连接信息
+	logger.Info("参与者加入房间成功",
+		zap.String("room_id", resp.RoomID),
+		zap.String("uid", req.UID),
+		zap.String("creator", resp.Creator),
+		zap.String("livekit_url", resp.URL),
+		zap.Uint8("room_status", resp.Status),
+		zap.String("language", lang),
+	)
 
 	// 发送业务 webhook 事件
 	// if ph.businessWebhookService != nil && resp != nil {
@@ -106,7 +103,7 @@ func (ph *ParticipantHandler) JoinRoom(c *gin.Context) {
 	// 	_ = ph.businessWebhookService.SendEvent(models.BusinessEventParticipantJoined, eventData)
 	// }
 
-	c.JSON(http.StatusOK, resp)
+	utils.RespondWithData(c, resp)
 }
 
 // LeaveRoom 参与者离开房间
@@ -123,10 +120,7 @@ func (ph *ParticipantHandler) LeaveRoom(c *gin.Context) {
 			zap.String("room_id", roomID),
 			zap.String("language", lang),
 		)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code": 400,
-			"msg":  i18n.Translate(lang, i18n.InvalidParameters),
-		})
+		utils.RespondWithBindError(c)
 		return
 	}
 
@@ -142,25 +136,18 @@ func (ph *ParticipantHandler) LeaveRoom(c *gin.Context) {
 				zap.String("uid", req.UID),
 				zap.String("language", lang),
 			)
-			c.JSON(http.StatusBadRequest, gin.H{
-				"code": 400,
-				"msg":  businessErr.GetLocalizedMessage(lang),
-			})
 		} else {
 			logger.Error("离开房间系统错误",
 				zap.Error(err),
 				zap.String("room_id", req.RoomID),
 				zap.String("uid", req.UID),
 			)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"code": 500,
-				"msg":  err.Error(),
-			})
 		}
+		utils.RespondWithBusinessError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, nil)
+	utils.RespondWithData(c, nil)
 }
 
 // InviteParticipants 邀请参与者
@@ -177,10 +164,7 @@ func (ph *ParticipantHandler) InviteParticipants(c *gin.Context) {
 			zap.String("room_id", roomID),
 			zap.String("language", lang),
 		)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code": 400,
-			"msg":  i18n.Translate(lang, i18n.InvalidParameters),
-		})
+		utils.RespondWithBindError(c)
 		return
 	}
 
@@ -195,10 +179,6 @@ func (ph *ParticipantHandler) InviteParticipants(c *gin.Context) {
 				zap.Strings("uids", req.UIDs),
 				zap.String("language", lang),
 			)
-			c.JSON(http.StatusBadRequest, gin.H{
-				"code": 400,
-				"msg":  businessErr.GetLocalizedMessage(lang),
-			})
 		} else {
 			logger.Error("邀请参与者系统错误",
 				zap.Error(err),
@@ -206,15 +186,12 @@ func (ph *ParticipantHandler) InviteParticipants(c *gin.Context) {
 				zap.Strings("uids", req.UIDs),
 				zap.String("language", lang),
 			)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"code": 500,
-				"msg":  err.Error(),
-			})
 		}
+		utils.RespondWithBusinessError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, nil)
+	utils.RespondWithData(c, nil)
 }
 
 // GetUserAvailableRooms 同步用户可加入的房间列表
@@ -229,10 +206,7 @@ func (ph *ParticipantHandler) GetUserAvailableRooms(c *gin.Context) {
 		logger.Error("获取用户可加入房间列表参数缺失",
 			zap.String("language", lang),
 		)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code": 400,
-			"msg":  i18n.Translate(lang, i18n.InvalidParameters),
-		})
+		utils.RespondWithBindError(c)
 		return
 	}
 
@@ -242,20 +216,7 @@ func (ph *ParticipantHandler) GetUserAvailableRooms(c *gin.Context) {
 			zap.Error(err),
 			zap.String("uid", uid),
 		)
-
-		// 判断是否为业务错误
-		if businessErr, ok := err.(*errors.BusinessError); ok {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"code": businessErr.Code,
-				"msg":  businessErr.Message,
-			})
-			return
-		}
-
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code": 500,
-			"msg":  err.Error(),
-		})
+		utils.RespondWithBusinessError(c, err)
 		return
 	}
 
@@ -265,5 +226,5 @@ func (ph *ParticipantHandler) GetUserAvailableRooms(c *gin.Context) {
 	}
 
 	// 直接返回数组，不包装在 data 节点中
-	c.JSON(http.StatusOK, data)
+	utils.RespondWithData(c, data)
 }

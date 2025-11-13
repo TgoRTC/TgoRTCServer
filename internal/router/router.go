@@ -34,7 +34,7 @@ func SetupRouter(db *gorm.DB, redisClient *redis.Client, cfg *config.Config, bus
 	participantHandler := handler.NewParticipantHandler(participantService)
 
 	// 初始化 webhook 服务和处理器
-	webhookService := service.NewWebhookService(db, redisClient)
+	webhookService := service.NewWebhookService(db, redisClient, cfg)
 	webhookValidator := livekit.NewWebhookValidator(cfg.LiveKitAPIKey, cfg.LiveKitAPISecret)
 	webhookHandler := handler.NewWebhookHandler(webhookService, webhookValidator)
 	webhookLogHandler := handler.NewWebhookLogHandler(businessWebhookService)

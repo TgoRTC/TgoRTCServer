@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"tgo-rtc-server/internal/config"
+	"tgo-rtc-server/internal/utils"
 
 	"github.com/livekit/protocol/auth"
+	"go.uber.org/zap"
 )
 
 // TokenResult Token 生成结果，包含 Token 和配置信息
@@ -21,7 +23,8 @@ type TokenResult struct {
 type TokenGenerator struct {
 	apiKey    string
 	apiSecret string
-	url       string
+	url       string // 后端调用 LiveKit API 的地址
+	clientURL string // 前端连接 LiveKit 的地址
 	timeout   int
 }
 
@@ -31,6 +34,7 @@ func NewTokenGenerator(cfg *config.Config) *TokenGenerator {
 		apiKey:    cfg.LiveKitAPIKey,
 		apiSecret: cfg.LiveKitAPISecret,
 		url:       cfg.LiveKitURL,
+		clientURL: cfg.LiveKitClientURL,
 		timeout:   cfg.LiveKitTimeout,
 	}
 }
@@ -42,15 +46,29 @@ func (tg *TokenGenerator) GenerateToken(roomName, uid string) (string, error) {
 
 // GenerateTokenWithConfig 生成 Token 并返回配置信息
 func (tg *TokenGenerator) GenerateTokenWithConfig(roomName, uid string) (*TokenResult, error) {
+	logger := utils.GetLogger()
+
 	token, err := tg.GenerateTokenWithExpiry(roomName, uid)
 	if err != nil {
 		return nil, err
 	}
-	return &TokenResult{
+
+	result := &TokenResult{
 		Token:   token,
-		URL:     tg.url,
+		URL:     tg.clientURL, // 返回前端可访问的 URL
 		Timeout: tg.timeout,
-	}, nil
+	}
+
+	// 记录 Token 生成和 LiveKit URL 分配信息
+	logger.Info("LiveKit Token 生成成功",
+		zap.String("room_id", roomName),
+		zap.String("uid", uid),
+		zap.String("livekit_url", tg.clientURL),
+		zap.String("backend_url", tg.url),
+		zap.Int("timeout", tg.timeout),
+	)
+
+	return result, nil
 }
 
 // GenerateTokenWithExpiry 生成指定过期时间的 Token

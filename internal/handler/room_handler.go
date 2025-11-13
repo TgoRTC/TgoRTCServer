@@ -1,10 +1,7 @@
 package handler
 
 import (
-	"net/http"
-
 	"tgo-rtc-server/internal/errors"
-	"tgo-rtc-server/internal/i18n"
 	"tgo-rtc-server/internal/middleware"
 	"tgo-rtc-server/internal/models"
 	"tgo-rtc-server/internal/service"
@@ -44,34 +41,21 @@ func (rh *RoomHandler) CreateRoom(c *gin.Context) {
 			zap.Error(err),
 			zap.String("language", lang),
 		)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code": 400,
-			"msg":  i18n.Translate(lang, i18n.InvalidParameters),
-		})
+		utils.RespondWithBindError(c)
 		return
 	}
 
 	resp, err := rh.roomService.CreateRoom(&req)
 	if err != nil {
 		if businessErr, ok := err.(*errors.BusinessError); ok {
-			// 业务错误统一返回 HTTP 400，通过响应体中的 code 字段区分具体错误
-			errorCode := businessErr.Code
-			if errorCode == 0 {
-				errorCode = 400 // 默认 400
-			}
-
 			logger.Warn("创建房间业务错误",
 				zap.String("error_key", string(businessErr.Key)),
 				zap.String("error_message", businessErr.GetLocalizedMessage(lang)),
-				zap.Int("error_code", errorCode),
+				zap.String("error_code", businessErr.GetErrorCode()),
 				zap.String("creator", req.Creator),
 				zap.String("source_channel_id", req.SourceChannelID),
 				zap.String("language", lang),
 			)
-			c.JSON(http.StatusBadRequest, gin.H{
-				"code": errorCode,
-				"msg":  businessErr.GetLocalizedMessage(lang),
-			})
 		} else {
 			logger.Error("创建房间系统错误",
 				zap.Error(err),
@@ -79,12 +63,21 @@ func (rh *RoomHandler) CreateRoom(c *gin.Context) {
 				zap.String("source_channel_id", req.SourceChannelID),
 				zap.String("language", lang),
 			)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"code": 500,
-				"msg":  err.Error(),
-			})
 		}
+		utils.RespondWithBusinessError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, resp)
+
+	// 记录房间创建成功和 LiveKit 连接信息
+	logger.Info("房间创建成功",
+		zap.String("room_id", resp.RoomID),
+		zap.String("creator", resp.Creator),
+		zap.String("source_channel_id", resp.SourceChannelID),
+		zap.String("livekit_url", resp.URL),
+		zap.Strings("invited_uids", resp.UIDs),
+		zap.Uint8("status", resp.Status),
+		zap.String("language", lang),
+	)
+
+	utils.RespondWithData(c, resp)
 }

@@ -138,7 +138,7 @@ func (ss *SchedulerService) checkParticipantTimeout() {
 
 		if err := ss.db.Model(&models.Participant{}).
 			Where("room_id IN ?", roomIDs).
-			Update("status", models.ParticipantStatusTimeout).Error; err != nil {
+			Update("status", models.ParticipantStatusMissed).Error; err != nil {
 			logger.Error("更新超时参与者状态失败",
 				zap.Error(err),
 			)

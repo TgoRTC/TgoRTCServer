@@ -59,6 +59,14 @@ func (e *BusinessError) GetLocalizedMessage(lang string) string {
 	return e.Message
 }
 
+// GetErrorCode 获取错误代码（字符串格式）
+func (e *BusinessError) GetErrorCode() string {
+	if e.Code == 0 {
+		return "400"
+	}
+	return fmt.Sprintf("%d", e.Code)
+}
+
 // IsBusinessError 判断是否为业务错误
 func IsBusinessError(err error) bool {
 	_, ok := err.(*BusinessError)

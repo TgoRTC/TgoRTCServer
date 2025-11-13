@@ -70,7 +70,7 @@ func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.Create
 	// 5. 对 UIDs 进行去重，并移除创建者（避免重复添加）
 	deduplicatedUIDs := rs.participantDeduplicator.DeduplicateUIDs(req.UIDs)
 	deduplicatedUIDs = rs.participantDeduplicator.RemoveDuplicateUIDs(deduplicatedUIDs, req.Creator)
-
+	isBusy := false
 	// 6. 检查 UIDs 中的用户是否在通话中
 	if len(deduplicatedUIDs) > 0 {
 		var busyParticipant models.Participant
@@ -78,7 +78,8 @@ func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.Create
 			deduplicatedUIDs, models.ParticipantStatusInviting, models.ParticipantStatusJoined).
 			First(&busyParticipant).Error; err == nil {
 			// 返回 409 Conflict 状态码，表示用户正在通话中
-			return nil, errors.NewConflictError(i18n.ParticipantInCall, busyParticipant.UID)
+			isBusy = true
+			//return nil, errors.NewConflictError(i18n.ParticipantInCall, busyParticipant.UID)
 		} else if err != gorm.ErrRecordNotFound {
 			return nil, errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
 		}
@@ -89,7 +90,12 @@ func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.Create
 	if maxParticipants <= 0 {
 		maxParticipants = 2
 	}
-
+	participantStatus := models.ParticipantStatusInviting
+	roomStatus := models.RoomStatusNotStarted
+	if isBusy {
+		roomStatus = models.RoomStatusBusy
+		participantStatus = models.ParticipantStatusBusy
+	}
 	// 使用事务确保数据一致性
 	err := rs.db.Transaction(func(tx *gorm.DB) error {
 		// 创建房间
@@ -100,7 +106,7 @@ func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.Create
 			RoomID:            roomID,
 			RTCType:           req.RTCType,
 			InviteOn:          req.InviteOn,
-			Status:            models.RoomStatusNotStarted,
+			Status:            uint8(roomStatus),
 			MaxParticipants:   maxParticipants,
 		}
 
@@ -115,7 +121,7 @@ func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.Create
 		participants = append(participants, models.Participant{
 			RoomID: roomID,
 			UID:    req.Creator,
-			Status: models.ParticipantStatusInviting,
+			Status: uint8(participantStatus),
 		})
 
 		// 添加去重后的邀请用户
@@ -124,7 +130,7 @@ func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.Create
 				participants = append(participants, models.Participant{
 					RoomID: roomID,
 					UID:    uid,
-					Status: models.ParticipantStatusInviting,
+					Status: uint8(participantStatus),
 				})
 			}
 		}
@@ -140,18 +146,16 @@ func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.Create
 	if err != nil {
 		return nil, err
 	}
-
+	// 如果正在通话中直接返回错误，不能返回房间信息
+	if isBusy {
+		return nil, errors.NewConflictError(i18n.ParticipantInCall)
+	}
 	// 生成 Token 和获取配置信息
 	tokenResult, err := rs.tokenGenerator.GenerateTokenWithConfig(roomID, req.Creator)
 	if err != nil {
 		return nil, errors.NewBusinessErrorWithKey(i18n.TokenGenerationFailed, err.Error())
 	}
 
-	// 获取所有参与者的 UIDs
-	var participants []models.Participant
-	if err := rs.db.Where("room_id = ?", roomID).Find(&participants).Error; err != nil {
-		return nil, errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
-	}
 	uids := append(req.UIDs, req.Creator)
 	uids = rs.participantDeduplicator.DeduplicateUIDs(uids)
 	return &models.CreateRoomResponse{
@@ -165,6 +169,7 @@ func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.Create
 		CreatedAt:         rs.timeFormatter.FormatDateTime(time.Now()),
 		MaxParticipants:   maxParticipants,
 		Timeout:           tokenResult.Timeout,
+		RTCType:           req.RTCType,
 		UIDs:              uids,
 	}, nil
 }

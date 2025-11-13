@@ -36,8 +36,8 @@ func NewBusinessWebhookService(db *gorm.DB, redisClient *redis.Client, cfg *conf
 		db:          db,
 		redisClient: redisClient,
 		config:      cfg,
-		client: &http.Client{
-			Timeout: time.Duration(cfg.BusinessWebhookTimeout) * time.Second,
+		client:      &http.Client{
+			// 不设置全局超时，每个请求使用端点配置的超时
 		},
 	}
 }
@@ -46,8 +46,8 @@ func NewBusinessWebhookService(db *gorm.DB, redisClient *redis.Client, cfg *conf
 func (bws *BusinessWebhookService) SendEvent(eventType string, data interface{}) error {
 	logger := utils.GetLogger()
 
-	// 检查是否配置了业务 webhook URLs（如果没有配置则不发送）
-	if len(bws.config.BusinessWebhookURLs) == 0 {
+	// 检查是否配置了业务 webhook 端点（如果没有配置则不发送）
+	if len(bws.config.BusinessWebhookEndpoints) == 0 {
 		return nil
 	}
 
@@ -70,9 +70,9 @@ func (bws *BusinessWebhookService) SendEvent(eventType string, data interface{})
 		return err
 	}
 
-	// 异步发送到所有配置的 URLs
-	for _, webhookURL := range bws.config.BusinessWebhookURLs {
-		go bws.sendToURL(webhookURL, event, payload)
+	// 异步发送到所有配置的端点
+	for _, endpoint := range bws.config.BusinessWebhookEndpoints {
+		go bws.sendToEndpoint(endpoint, event, payload)
 	}
 
 	return nil
@@ -83,8 +83,8 @@ func (bws *BusinessWebhookService) SendEvent(eventType string, data interface{})
 func (bws *BusinessWebhookService) SendRoomFinishedEventOnce(roomID string, data *models.RoomEventData) error {
 	logger := utils.GetLogger()
 
-	// 检查是否配置了业务 webhook URLs（如果没有配置则不发送）
-	if len(bws.config.BusinessWebhookURLs) == 0 {
+	// 检查是否配置了业务 webhook 端点（如果没有配置则不发送）
+	if len(bws.config.BusinessWebhookEndpoints) == 0 {
 		return nil
 	}
 
@@ -140,31 +140,36 @@ func (bws *BusinessWebhookService) SendRoomFinishedEventOnce(roomID string, data
 	return nil
 }
 
-// sendToURL 发送事件到指定 URL
-func (bws *BusinessWebhookService) sendToURL(baseURL string, event *models.BusinessWebhookEvent, payload []byte) {
+// sendToEndpoint 发送事件到指定端点
+func (bws *BusinessWebhookService) sendToEndpoint(endpoint config.WebhookEndpoint, event *models.BusinessWebhookEvent, payload []byte) {
 	logger := utils.GetLogger()
 
 	// 构建带有 event 参数的 URL
 	// 格式: baseURL?event=room_started
-	u, err := url.Parse(baseURL)
+	u, err := url.Parse(endpoint.URL)
 	if err != nil {
 		logger.Error("解析 webhook URL 失败",
-			zap.String("url", baseURL),
+			zap.String("url", endpoint.URL),
 			zap.String("event_id", event.EventID),
 			zap.Error(err),
 		)
-		bws.logWebhookAttempt(event, baseURL, 0, "", err.Error())
+		bws.logWebhookAttempt(event, endpoint.URL, 0, "", err.Error())
 		return
 	}
 
 	// 添加 event 查询参数
 	q := u.Query()
-	q.Set("event", event.EventType)
+	q.Set("event_type", event.EventType)
+	q.Set("event_id", event.EventID)
 	u.RawQuery = q.Encode()
 	finalURL := u.String()
 
+	// 创建带超时的上下文
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(endpoint.Timeout)*time.Second)
+	defer cancel()
+
 	// 创建请求
-	req, err := http.NewRequest("POST", finalURL, bytes.NewBuffer(payload))
+	req, err := http.NewRequestWithContext(ctx, "POST", finalURL, bytes.NewBuffer(payload))
 	if err != nil {
 		logger.Error("创建 webhook 请求失败",
 			zap.String("url", finalURL),
@@ -182,11 +187,11 @@ func (bws *BusinessWebhookService) sendToURL(baseURL string, event *models.Busin
 	req.Header.Set("X-Event-ID", event.EventID)
 	req.Header.Set("X-Timestamp", fmt.Sprintf("%d", event.Timestamp))
 
-	// 计算签名
-	signature := bws.calculateSignature(payload)
+	// 计算签名（使用该端点对应的密钥）
+	signature := bws.calculateSignatureWithSecret(payload, endpoint.Secret)
 	req.Header.Set("X-Signature", signature)
 
-	// 发送请求
+	// 发送请求（使用端点配置的超时时间）
 	resp, err := bws.client.Do(req)
 	if err != nil {
 		logger.Error("发送 webhook 请求失败",
@@ -235,9 +240,18 @@ func (bws *BusinessWebhookService) sendToURL(baseURL string, event *models.Busin
 	}
 }
 
-// calculateSignature 计算请求签名
+// calculateSignature 计算请求签名（已废弃，保留用于向后兼容）
 func (bws *BusinessWebhookService) calculateSignature(payload []byte) string {
-	h := hmac.New(sha256.New, []byte(bws.config.BusinessWebhookSecret))
+	// 如果有配置端点，使用第一个端点的密钥
+	if len(bws.config.BusinessWebhookEndpoints) > 0 {
+		return bws.calculateSignatureWithSecret(payload, bws.config.BusinessWebhookEndpoints[0].Secret)
+	}
+	return ""
+}
+
+// calculateSignatureWithSecret 使用指定密钥计算请求签名
+func (bws *BusinessWebhookService) calculateSignatureWithSecret(payload []byte, secret string) string {
+	h := hmac.New(sha256.New, []byte(secret))
 	h.Write(payload)
 	return hex.EncodeToString(h.Sum(nil))
 }

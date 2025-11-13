@@ -1,10 +1,46 @@
 package models
 
+import (
+	"encoding/json"
+	"strconv"
+)
+
+// FlexInt64 可以解析字符串或数字格式的 int64
+type FlexInt64 int64
+
+// UnmarshalJSON 自定义 JSON 解析，支持字符串和数字
+func (f *FlexInt64) UnmarshalJSON(data []byte) error {
+	// 尝试解析为数字
+	var num int64
+	if err := json.Unmarshal(data, &num); err == nil {
+		*f = FlexInt64(num)
+		return nil
+	}
+
+	// 尝试解析为字符串
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		num, err := strconv.ParseInt(str, 10, 64)
+		if err != nil {
+			return err
+		}
+		*f = FlexInt64(num)
+		return nil
+	}
+
+	return nil
+}
+
+// Int64 返回 int64 值
+func (f FlexInt64) Int64() int64 {
+	return int64(f)
+}
+
 // WebhookEvent LiveKit webhook 事件
 type WebhookEvent struct {
 	Event       string           `json:"event"`
 	ID          string           `json:"id"`
-	CreatedAt   int64            `json:"createdAt"`
+	CreatedAt   FlexInt64        `json:"createdAt"`
 	Room        *RoomInfo        `json:"room,omitempty"`
 	Participant *ParticipantInfo `json:"participant,omitempty"`
 	Track       *TrackInfo       `json:"track,omitempty"`
@@ -14,23 +50,23 @@ type WebhookEvent struct {
 
 // RoomInfo 房间信息
 type RoomInfo struct {
-	SID             string `json:"sid"`
-	Name            string `json:"name"`
-	EmptyTimeout    int32  `json:"emptyTimeout"`
-	MaxParticipants int32  `json:"maxParticipants"`
-	CreationTime    int64  `json:"creationTime"`
-	Metadata        string `json:"metadata"`
-	NumParticipants int32  `json:"numParticipants"`
+	SID             string    `json:"sid"`
+	Name            string    `json:"name"`
+	EmptyTimeout    int32     `json:"emptyTimeout"`
+	MaxParticipants int32     `json:"maxParticipants"`
+	CreationTime    FlexInt64 `json:"creationTime"`
+	Metadata        string    `json:"metadata"`
+	NumParticipants int32     `json:"numParticipants"`
 }
 
 // ParticipantInfo 参与者信息
 type ParticipantInfo struct {
-	SID      string `json:"sid"`
-	Identity string `json:"identity"`
-	Name     string `json:"name"`
-	State    string `json:"state"`
-	Metadata string `json:"metadata"`
-	JoinedAt int64  `json:"joinedAt"`
+	SID      string    `json:"sid"`
+	Identity string    `json:"identity"`
+	Name     string    `json:"name"`
+	State    string    `json:"state"`
+	Metadata string    `json:"metadata"`
+	JoinedAt FlexInt64 `json:"joinedAt"`
 }
 
 // TrackInfo 轨道信息

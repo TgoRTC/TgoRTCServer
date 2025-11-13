@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"net/http"
-
 	"tgo-rtc-server/internal/service"
 	"tgo-rtc-server/internal/utils"
 
@@ -32,18 +30,11 @@ func (wlh *WebhookLogHandler) GetLogStats(c *gin.Context) {
 		logger.Error("获取 webhook 日志统计失败",
 			zap.Error(err),
 		)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code": 500,
-			"msg":  "获取统计信息失败",
-		})
+		utils.RespondInternalError(c, "获取统计信息失败")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code": 200,
-		"msg":  "ok",
-		"data": stats,
-	})
+	utils.RespondWithSuccessData(c, "ok", stats)
 }
 
 // CleanupLogs 手动清理 webhook 日志
@@ -59,10 +50,7 @@ func (wlh *WebhookLogHandler) CleanupLogs(c *gin.Context) {
 		logger.Error("清理日志参数绑定失败",
 			zap.Error(err),
 		)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code": 400,
-			"msg":  "参数错误",
-		})
+		utils.RespondWithBindError(c)
 		return
 	}
 
@@ -70,16 +58,9 @@ func (wlh *WebhookLogHandler) CleanupLogs(c *gin.Context) {
 		logger.Error("清理 webhook 日志失败",
 			zap.Error(err),
 		)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code": 500,
-			"msg":  "清理日志失败",
-		})
+		utils.RespondInternalError(c, "清理日志失败")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code": 200,
-		"msg":  "日志清理成功",
-	})
+	utils.RespondWithSuccess(c, "日志清理成功")
 }
-

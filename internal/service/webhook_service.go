@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"tgo-rtc-server/internal/config"
 	"tgo-rtc-server/internal/models"
 	"tgo-rtc-server/internal/utils"
 
@@ -18,14 +19,16 @@ import (
 type WebhookService struct {
 	db                     *gorm.DB
 	redisClient            *redis.Client
+	config                 *config.Config
 	businessWebhookService *BusinessWebhookService
 }
 
 // NewWebhookService 创建 webhook 服务
-func NewWebhookService(db *gorm.DB, redisClient *redis.Client) *WebhookService {
+func NewWebhookService(db *gorm.DB, redisClient *redis.Client, cfg *config.Config) *WebhookService {
 	return &WebhookService{
 		db:          db,
 		redisClient: redisClient,
+		config:      cfg,
 	}
 }
 
@@ -61,7 +64,7 @@ func (ws *WebhookService) HandleWebhookEvent(event *models.WebhookEvent) error {
 			)
 		} else if exists > 0 {
 			// 事件已处理过，直接返回
-			logger.Info("事件已处理过，跳过",
+			logger.Info("livekit 事件已处理过，跳过",
 				zap.String("event_type", event.Event),
 				zap.String("event_id", event.ID),
 			)
@@ -107,13 +110,11 @@ func (ws *WebhookService) HandleWebhookEvent(event *models.WebhookEvent) error {
 
 // handleRoomStarted 处理房间开始事件
 func (ws *WebhookService) handleRoomStarted(event *models.WebhookEvent) error {
-	logger := utils.GetLogger()
-
 	if event.Room == nil {
 		return nil
 	}
-
-	logger.Info("房间已开始",
+	logger := utils.GetLogger()
+	logger.Info("livekit事件---> 房间已开始",
 		zap.String("room_name", event.Room.Name),
 		zap.String("room_sid", event.Room.SID),
 	)
@@ -122,12 +123,12 @@ func (ws *WebhookService) handleRoomStarted(event *models.WebhookEvent) error {
 	var room models.Room
 	if err := ws.db.Where("room_id = ?", event.Room.Name).First(&room).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			logger.Warn("房间不存在",
+			logger.Warn("livekit事件: 房间开始--->房间不存在",
 				zap.String("room_id", event.Room.Name),
 			)
 			return nil
 		}
-		logger.Error("查询房间失败",
+		logger.Error("livekit事件: 房间开始--->查询房间失败",
 			zap.String("room_id", event.Room.Name),
 			zap.Error(err),
 		)
@@ -136,17 +137,14 @@ func (ws *WebhookService) handleRoomStarted(event *models.WebhookEvent) error {
 
 	// 更新房间状态为进行中
 	if err := ws.db.Model(&room).Update("status", models.RoomStatusInProgress).Error; err != nil {
-		logger.Error("更新房间状态失败",
+		logger.Error("livekit事件: 房间开始--->更新房间状态失败",
 			zap.String("room_id", event.Room.Name),
+			zap.Uint8("room_status", models.RoomStatusInProgress),
 			zap.Error(err),
 		)
 		return err
 	}
-
-	logger.Info("房间状态已更新为进行中",
-		zap.String("room_id", event.Room.Name),
-	)
-
+	room.Status = models.RoomStatusInProgress
 	// 2、通知业务的webhook
 	if ws.businessWebhookService != nil {
 		ws.businessWebhookService.sendRoomStarted(&room)
@@ -157,22 +155,20 @@ func (ws *WebhookService) handleRoomStarted(event *models.WebhookEvent) error {
 
 // handleRoomFinished 处理房间结束事件
 func (ws *WebhookService) handleRoomFinished(event *models.WebhookEvent) error {
-	logger := utils.GetLogger()
 	if event.Room == nil {
 		return nil
 	}
-
-	logger.Info("房间已结束",
+	logger := utils.GetLogger()
+	logger.Info("livekit事件: 房间结束",
 		zap.String("room_name", event.Room.Name),
 		zap.String("room_sid", event.Room.SID),
 	)
 
 	// 更新房间状态为已结束
-	var room models.Room
 	if err := ws.db.Model(&models.Room{}).
 		Where("room_id = ?", event.Room.Name).
 		Update("status", models.RoomStatusFinished).Error; err != nil {
-		logger.Error("更新房间状态失败",
+		logger.Error("livekit事件: 房间结束--->更新房间状态失败",
 			zap.String("room_id", event.Room.Name),
 			zap.Error(err),
 		)
@@ -180,8 +176,15 @@ func (ws *WebhookService) handleRoomFinished(event *models.WebhookEvent) error {
 	}
 
 	// 查询房间信息（用于后续 webhook 通知）
+	var room models.Room
 	if err := ws.db.Where("room_id = ?", event.Room.Name).First(&room).Error; err != nil {
-		logger.Error("查询房间信息失败",
+		if err == gorm.ErrRecordNotFound {
+			logger.Warn("livekit事件: 房间结束--->房间不存在",
+				zap.String("room_id", event.Room.Name),
+			)
+			return nil
+		}
+		logger.Error("livekit事件: 房间结束--->查询房间信息错误",
 			zap.String("room_id", event.Room.Name),
 			zap.Error(err),
 		)
@@ -192,17 +195,19 @@ func (ws *WebhookService) handleRoomFinished(event *models.WebhookEvent) error {
 	if err := ws.db.Model(&models.Participant{}).
 		Where("room_id = ? AND (status = ? OR status = ?)", event.Room.Name, models.ParticipantStatusInviting, models.ParticipantStatusJoined).
 		Update("status", models.ParticipantStatusHangup).Error; err != nil {
-		logger.Error("更新房间参与者状态失败",
+		logger.Error("livekit事件: 房间结束--->更新房间参与者状态为挂断失败",
 			zap.String("room_id", event.Room.Name),
 			zap.Error(err),
 		)
 		// 继续执行，不返回错误
-	} else {
-		logger.Info("房间参与者状态已更新为已挂断",
-			zap.String("room_id", event.Room.Name),
-		)
 	}
 
+	// 如果房间状态已经结束，则跳过
+	if room.Status > models.RoomStatusInProgress {
+		return nil
+	}
+	// fixme 这里不能直接将房间状态修改为结束，要根据情况标记 结束/取消/拒绝/超时
+	//	room.Status = models.RoomStatusFinished
 	// 2、通知业务的 webhook
 	if ws.businessWebhookService != nil {
 		ws.businessWebhookService.checkAndFinishRoom(&room)
@@ -295,44 +300,26 @@ func (ws *WebhookService) handleParticipantJoined(event *models.WebhookEvent) er
 
 // handleParticipantLeft 处理参与者离开事件
 func (ws *WebhookService) handleParticipantLeft(event *models.WebhookEvent) error {
-	logger := utils.GetLogger()
-
 	if event.Room == nil || event.Participant == nil {
 		return nil
 	}
-
-	logger.Info("参与者已离开",
+	logger := utils.GetLogger()
+	logger.Info("livekit事件: 参与者离开--->",
 		zap.String("participant_name", event.Participant.Name),
 		zap.String("participant_identity", event.Participant.Identity),
 		zap.String("room_name", event.Room.Name),
 	)
 
-	// 更新参与者状态为已挂断
-	var leftParticipant models.Participant
-	if err := ws.db.Model(&models.Participant{}).
-		Where("uid = ? AND room_id = ?", event.Participant.Identity, event.Room.Name).
-		Update("status", models.ParticipantStatusHangup).Error; err != nil {
-		logger.Error("更新参与者状态失败",
-			zap.String("participant_uid", event.Participant.Identity),
-			zap.String("room_id", event.Room.Name),
-			zap.Error(err),
-		)
-		return err
-	}
-
-	// 查询离开的参与者信息
-	if err := ws.db.Where("uid = ? AND room_id = ?", event.Participant.Identity, event.Room.Name).First(&leftParticipant).Error; err != nil {
-		logger.Error("查询参与者信息失败",
-			zap.String("participant_uid", event.Participant.Identity),
-			zap.String("room_id", event.Room.Name),
-			zap.Error(err),
-		)
-	}
-
 	// 1、查询房间信息
 	var room models.Room
 	if err := ws.db.Where("room_id = ?", event.Room.Name).First(&room).Error; err != nil {
-		logger.Error("查询房间信息失败",
+		if err == gorm.ErrRecordNotFound {
+			logger.Warn("livekit事件: 参与者离开--->房间不存在",
+				zap.String("room_id", event.Room.Name),
+			)
+			return nil
+		}
+		logger.Error("livekit事件: 参与者离开--->查询房间信息失败",
 			zap.String("room_id", event.Room.Name),
 			zap.Error(err),
 		)
@@ -342,34 +329,143 @@ func (ws *WebhookService) handleParticipantLeft(event *models.WebhookEvent) erro
 	if room.Status > models.RoomStatusInProgress {
 		return nil
 	}
-	// 2、检查是否需要标记房间为已结束
-	// shouldFinishRoom := false
 
+	// 更新参与者状态为已挂断，并设置离开时间
+	var leftParticipant models.Participant
+	if err := ws.db.Model(&models.Participant{}).
+		Where("uid = ? AND room_id = ?", event.Participant.Identity, event.Room.Name).
+		Updates(map[string]interface{}{
+			"status":     models.ParticipantStatusHangup,
+			"leave_time": time.Now().Unix(),
+		}).Error; err != nil {
+		logger.Error("livekit事件: 参与者离开--->更新参与者状态为已挂断失败",
+			zap.String("participant_uid", event.Participant.Identity),
+			zap.String("room_id", event.Room.Name),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	// 查询离开的参与者信息
+	if err := ws.db.Where("uid = ? AND room_id = ?", event.Participant.Identity, event.Room.Name).First(&leftParticipant).Error; err != nil {
+		logger.Error("livekit事件: 参与者离开--->查询离开的参与者信息失败",
+			zap.String("participant_uid", event.Participant.Identity),
+			zap.String("room_id", event.Room.Name),
+			zap.Error(err),
+		)
+	}
+
+	var allParticipants []models.Participant
+	if err := ws.db.Where("room_id = ?", event.Room.Name).Find(&allParticipants).Error; err != nil {
+		logger.Error("livekit事件: 参与者离开--->查所有参与者失败",
+			zap.String("room_id", event.Room.Name),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	uids := make([]string, 0, len(allParticipants))
+	for _, p := range allParticipants {
+		uids = append(uids, p.UID)
+	}
+	isSendCancelEvent := false
 	// 情况1：房间的 max_participants=2，则标记房间已经结束
 	if room.MaxParticipants == 2 {
 		// shouldFinishRoom = true
-		logger.Info("房间为双人通话，标记房间已结束",
-			zap.String("room_id", event.Room.Name),
-			zap.Int("max_participants", room.MaxParticipants),
-		)
+		// 查询所有参与者
+
+		// 统计已加入的参与者数量
+		joinedCount := 0
+		for _, p := range allParticipants {
+			if p.Status == models.ParticipantStatusJoined || p.Status == models.ParticipantStatusHangup {
+				joinedCount++
+			}
+		}
+		otherParticipantStatus := models.ParticipantStatusHangup
+		room.Status = models.RoomStatusFinished
+		if joinedCount < 2 {
+			// 未通话
+			if time.Now().Unix()-leftParticipant.JoinTime > int64(ws.config.LiveKitTimeout) {
+				room.Status = models.RoomStatusMissed // 超时未接听
+				otherParticipantStatus = models.ParticipantStatusMissed
+			} else {
+				room.Status = models.RoomStatusCancelled // 主动取消
+				otherParticipantStatus = models.ParticipantStatusCancelled
+			}
+		}
+		// 更新房间状态为已结束
+		if err := ws.db.Model(&models.Room{}).
+			Where("room_id = ?", event.Room.Name).
+			Update("status", room.Status).Error; err != nil {
+			logger.Error("livekit事件: 参与者离开--->更新房间状态为完成错误",
+				zap.String("room_id", event.Room.Name),
+				zap.Uint8("room_status", room.Status),
+				zap.Error(err),
+			)
+			return err
+		}
 
 		// 如果另外一个参与者 status=0（邀请中），将其改为 ParticipantStatusTimeout
 		if err := ws.db.Model(&models.Participant{}).
 			Where("room_id = ? AND uid != ? AND status = ?", event.Room.Name, event.Participant.Identity, models.ParticipantStatusInviting).
-			Update("status", models.ParticipantStatusTimeout).Error; err != nil {
-			logger.Error("更新其他参与者状态失败",
+			Update("status", otherParticipantStatus).Error; err != nil {
+			logger.Error("livekit事件: 参与者离开--->更新其他参与者状态失败",
 				zap.String("room_id", event.Room.Name),
 				zap.Error(err),
 			)
 		} else {
-			logger.Info("其他邀请中的参与者状态已更新为超时",
+			logger.Info("livekit事件: 参与者离开--->其他邀请中的参与者状态已更新",
 				zap.String("room_id", event.Room.Name),
+				zap.Int("other_participant_status", int(otherParticipantStatus)),
 			)
+		}
+	} else {
+		// 多人通话场景
+		if leftParticipant.UID == room.Creator {
+			// 判断是否有其他人加入
+			hasJoined := false
+			for _, p := range allParticipants {
+				if p.UID != leftParticipant.UID && (p.Status == models.ParticipantStatusJoined || p.Status == models.ParticipantStatusHangup || p.LeaveTime > 0) {
+					hasJoined = true
+					break
+				}
+			}
+			if !hasJoined {
+				// 如果没有其他人加入，则标记房间已取消
+				room.Status = models.RoomStatusCancelled
+				// 更新房间状态为已结束
+				if err := ws.db.Model(&models.Room{}).
+					Where("room_id = ?", event.Room.Name).
+					Update("status", room.Status).Error; err != nil {
+					logger.Error("livekit事件: 参与者离开--->多人通话更新房间状态为完成错误",
+						zap.String("room_id", event.Room.Name),
+						zap.Uint8("room_status", room.Status),
+						zap.Error(err),
+					)
+				}
+
+				// 更新其他参与者的状态为已取消
+				if err := ws.db.Model(&models.Participant{}).
+					Where("room_id = ?", event.Room.Name).
+					Update("status", models.ParticipantStatusCancelled).Error; err != nil {
+					logger.Error("livekit事件: 参与者离开--->多人通话更所有参与者状态为已取消错误",
+						zap.String("room_id", event.Room.Name),
+						zap.Error(err),
+					)
+				}
+				// fixme 多人通话下如果发起人离开，其他人均未加入，是否应该发送取消事件
+				// fixme 这里有个小概率事件 当其他参与者加入的同时，发起人离开，会导致这个逻辑执行
+				// fixme 先忽略这个情况
+				isSendCancelEvent = true
+			}
 		}
 	}
 	// 3、通知业务的 webhook
 	if ws.businessWebhookService != nil {
-		ws.businessWebhookService.sendParticipantLeft(&room, leftParticipant.UID)
+		if isSendCancelEvent {
+			ws.businessWebhookService.sendParticipantCancelled(&room, uids)
+		}
+		ws.businessWebhookService.sendParticipantLeft(&room, leftParticipant.UID, uids)
 		ws.businessWebhookService.checkAndFinishRoom(&room)
 	}
 

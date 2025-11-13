@@ -46,12 +46,12 @@ paths:
                   summary: 参数错误
                   value:
                     code: 400
-                    msg: 参数错误
+                    message: 参数错误
                 participant_in_call:
                   summary: 用户正在通话中（code=409）
                   value:
                     code: 409
-                    msg: 参与者 user_002 正在通话中，无法邀请
+                    message: 参与者 user_002 正在通话中，无法邀请
         '500':
           description: 服务器内部错误
           content:
@@ -298,6 +298,10 @@ paths:
       description: |
         TgoRTC 服务器会向业务系统配置的 Webhook URL 发送事件通知。业务系统需要实现此接口来接收事件。
 
+        **请求格式：**
+        - **Query 参数**: `event_type` 和 `event_id`
+        - **Body**: JSON 数据（房间事件使用 `RoomEventData`，参与者事件使用 `ParticipantEventData`）
+
         **事件类型说明：**
 
         **房间事件：**
@@ -310,91 +314,105 @@ paths:
         - `participant.rejected` - 参与者已拒绝（参与者拒绝加入房间）
         - `participant.missed` - 参与者已超时（参与者未在规定时间内加入）
         - `participant.cancelled` - 参与者已取消（发起者取消了对参与者的邀请）
+      parameters:
+        - name: event_type
+          in: query
+          required: true
+          description: 事件类型
+          schema:
+            type: string
+            enum:
+              - room.started
+              - room.finished
+              - participant.joined
+              - participant.left
+              - participant.rejected
+              - participant.missed
+              - participant.cancelled
+          example: "participant.joined"
+        - name: event_id
+          in: query
+          required: true
+          description: 事件唯一 ID（用于去重）
+          schema:
+            type: string
+          example: "1704096600-abc123"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BusinessWebhookEvent'
+              oneOf:
+                - $ref: '#/components/schemas/RoomEventData'
+                - $ref: '#/components/schemas/ParticipantEventData'
+              description: 事件数据（房间事件使用 RoomEventData，参与者事件使用 ParticipantEventData）
             examples:
               room.started:
                 summary: 房间已开始事件
+                description: "请求 URL: /tgortc/webhook?event_type=room.started&event_id=1704096600-abc123"
                 value:
-                  event_type: "room.started"
-                  event_id: "1704096600-abc123"
-                  timestamp: 1704096600
-                  data:
-                    source_channel_id: "channel_001"
-                    source_channel_type: 0
-                    room_id: "room_abc123"
-                    creator: "user_001"
-                    rtc_type: 1
-                    invite_on: 0
-                    status: 1
-                    max_participants: 2
-                    duration: 0
-                    uids: ["user_001"]
-                    created_at: 1704096500
-                    updated_at: 1704096600
+                  source_channel_id: "channel_001"
+                  source_channel_type: 0
+                  room_id: "room_abc123"
+                  creator: "user_001"
+                  rtc_type: 1
+                  invite_on: 0
+                  status: 1
+                  max_participants: 2
+                  duration: 0
+                  uids: ["user_001"]
+                  created_at: 1704096500
+                  updated_at: 1704096600
               room.finished:
                 summary: 房间已结束事件
+                description: "请求 URL: /tgortc/webhook?event_type=room.finished&event_id=1704096900-xyz789"
                 value:
-                  event_type: "room.finished"
-                  event_id: "1704096900-xyz789"
-                  timestamp: 1704096900
-                  data:
-                    source_channel_id: "channel_001"
-                    source_channel_type: 0
-                    room_id: "room_abc123"
-                    creator: "user_001"
-                    rtc_type: 1
-                    invite_on: 0
-                    status: 2
-                    max_participants: 2
-                    duration: 300
-                    uids: ["user_001", "user_002"]
-                    created_at: 1704096500
-                    updated_at: 1704096900
+                  source_channel_id: "channel_001"
+                  source_channel_type: 0
+                  room_id: "room_abc123"
+                  creator: "user_001"
+                  rtc_type: 1
+                  invite_on: 0
+                  status: 2
+                  max_participants: 2
+                  duration: 300
+                  uids: ["user_001", "user_002"]
+                  created_at: 1704096500
+                  updated_at: 1704096900
               participant.joined:
                 summary: 参与者已加入事件
+                description: "请求 URL: /tgortc/webhook?event_type=participant.joined&event_id=1704096700-def456"
                 value:
-                  event_type: "participant.joined"
-                  event_id: "1704096700-def456"
-                  timestamp: 1704096700
-                  data:
-                    source_channel_id: "channel_001"
-                    source_channel_type: 0
-                    room_id: "room_abc123"
-                    creator: "user_001"
-                    rtc_type: 1
-                    invite_on: 0
-                    status: 1
-                    max_participants: 2
-                    duration: 0
-                    uids: ["user_001", "user_002"]
-                    created_at: 1704096500
-                    updated_at: 1704096700
-                    uid: "user_002"
+                  source_channel_id: "channel_001"
+                  source_channel_type: 0
+                  room_id: "room_abc123"
+                  creator: "user_001"
+                  rtc_type: 1
+                  invite_on: 0
+                  status: 1
+                  max_participants: 2
+                  duration: 0
+                  uids: ["user_001", "user_002"]
+                  created_at: 1704096500
+                  updated_at: 1704096700
+                  uid: "user_002"
               participant.left:
                 summary: 参与者已离开事件
+                description: "请求 URL: /tgortc/webhook?event_type=participant.left&event_id=1704096800-ghi789"
                 value:
-                  event_type: "participant.left"
-                  event_id: "1704096800-ghi789"
-                  timestamp: 1704096800
-                  data:
-                    source_channel_id: "channel_001"
-                    source_channel_type: 0
-                    room_id: "room_abc123"
-                    creator: "user_001"
-                    rtc_type: 1
-                    invite_on: 0
-                    status: 2
-                    max_participants: 2
-                    duration: 0
-                    uids: ["user_001", "user_002"]
-                    created_at: 1704096500
-                    updated_at: 1704096800
-                    uid: "user_002"
+                  source_channel_id: "channel_001"
+                  source_channel_type: 0
+                  room_id: "room_abc123"
+                  creator: "user_001"
+                  rtc_type: 1
+                  invite_on: 0
+                  status: 2
+                  max_participants: 2
+                  duration: 0
+                  uids: ["user_001", "user_002"]
+                  created_at: 1704096500
+                  updated_at: 1704096800
+                  uid: "user_002"
       responses:
         '200':
           description: 事件接收成功
@@ -475,7 +493,7 @@ components:
           example: "http://localhost:7880"
         status:
           type: integer
-          description: "房间状态（0: 未开始, 1: 进行中, 2: 已结束, 3: 已取消）"
+          description: "房间状态（0: 未开始, 1: 进行中, 2: 已结束, 3: 已取消, 4: 已拒绝, 5: 通话中未接听, 6: 超时未加入）"
           example: 0
         created_at:
           type: string
@@ -607,7 +625,7 @@ components:
         code:
           type: integer
           example: 200
-        msg:
+        message:
           type: string
           example: "ok"
         data:
@@ -646,7 +664,7 @@ components:
         code:
           type: integer
           example: 200
-        msg:
+        message:
           type: string
           example: "ok"
 
@@ -656,45 +674,9 @@ components:
         code:
           type: integer
           example: 400
-        msg:
+        message:
           type: string
           example: "参数错误"
-
-    BusinessWebhookEvent:
-      type: object
-      description: 业务 Webhook 事件
-      required:
-        - event_type
-        - event_id
-        - timestamp
-        - data
-      properties:
-        event_type:
-          type: string
-          description: 事件类型
-          enum:
-            - room.started
-            - room.finished
-            - participant.joined
-            - participant.left
-            - participant.rejected
-            - participant.missed
-            - participant.cancelled
-          example: "participant.joined"
-        event_id:
-          type: string
-          description: 事件唯一 ID（用于去重）
-          example: "1704096600-abc123"
-        timestamp:
-          type: integer
-          format: int64
-          description: 事件时间戳（秒）
-          example: 1704096600
-        data:
-          oneOf:
-            - $ref: '#/components/schemas/RoomEventData'
-            - $ref: '#/components/schemas/ParticipantEventData'
-          description: 事件数据（房间事件使用 RoomEventData，参与者事件使用 ParticipantEventData）
 
     RoomEventData:
       type: object

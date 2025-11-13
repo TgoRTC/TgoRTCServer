@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"net/http"
-
 	"tgo-rtc-server/internal/livekit"
 	"tgo-rtc-server/internal/service"
 	"tgo-rtc-server/internal/utils"
@@ -37,10 +35,7 @@ func (wh *WebhookHandler) HandleWebhook(c *gin.Context) {
 			zap.Error(err),
 			zap.String("remote_addr", c.RemoteIP()),
 		)
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"code": 401,
-			"msg":  "验证失败",
-		})
+		utils.RespondUnauthorized(c, "验证失败")
 		return
 	}
 
@@ -51,10 +46,7 @@ func (wh *WebhookHandler) HandleWebhook(c *gin.Context) {
 			zap.Error(err),
 			zap.String("remote_addr", c.RemoteIP()),
 		)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code": 400,
-			"msg":  "解析事件失败",
-		})
+		utils.RespondBadRequest(c, "解析事件失败")
 		return
 	}
 
@@ -65,10 +57,7 @@ func (wh *WebhookHandler) HandleWebhook(c *gin.Context) {
 			zap.String("event_type", event.Event),
 			zap.String("event_id", event.ID),
 		)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code": 500,
-			"msg":  "处理事件失败",
-		})
+		utils.RespondInternalError(c, "处理事件失败")
 		return
 	}
 
@@ -77,8 +66,5 @@ func (wh *WebhookHandler) HandleWebhook(c *gin.Context) {
 		zap.String("event_id", event.ID),
 	)
 
-	c.JSON(http.StatusOK, gin.H{
-		"code": 200,
-		"msg":  "ok",
-	})
+	utils.RespondWithSuccess(c, "ok")
 }

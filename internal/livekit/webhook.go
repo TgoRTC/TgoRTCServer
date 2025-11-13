@@ -2,6 +2,7 @@ package livekit
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -85,10 +86,20 @@ func (wv *WebhookValidator) verifyToken(tokenString string, body []byte) error {
 		return fmt.Errorf("token 中缺少 sha256 claim")
 	}
 
-	if claimHash != hashHex {
-		return fmt.Errorf("sha256 hash 不匹配: expected %s, got %s", hashHex, claimHash)
+	// LiveKit 可能发送 base64 编码或 hex 编码的 hash
+	// 尝试将 base64 编码转换为 hex 编码
+	var claimHashHex string
+	if decoded, err := base64.StdEncoding.DecodeString(claimHash); err == nil {
+		// 是 base64 编码，转换为 hex
+		claimHashHex = hex.EncodeToString(decoded)
+	} else {
+		// 假设是 hex 编码
+		claimHashHex = claimHash
+	}
+
+	if claimHashHex != hashHex {
+		return fmt.Errorf("sha256 hash 不匹配: expected %s, got %s (原始: %s)", hashHex, claimHashHex, claimHash)
 	}
 
 	return nil
 }
-
