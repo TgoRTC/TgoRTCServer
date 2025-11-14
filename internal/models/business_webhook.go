@@ -45,9 +45,10 @@ type RoomEventData struct {
 // ParticipantEventData 参与者事件数据
 // 用于所有参与者相关事件：joined, left, rejected, timeout, missed, cancelled
 type ParticipantEventData struct {
-	RoomEventData        // 嵌入房间事件数据
-	UID           string `json:"uid"`         // 操作者 UID（加入者/离开者/拒绝者等）
-	DeviceType    string `json:"device_type"` // 设备类型
+	RoomEventData          // 嵌入房间事件数据
+	UID           string   `json:"uid"`         // 操作者 UID（加入者/离开者/拒绝者等）
+	DeviceType    string   `json:"device_type"` // 设备类型
+	MissedUids    []string `json:"missed_uids"` // 超时的参与者uids
 }
 
 // BusinessWebhookRequest 业务 webhook 请求

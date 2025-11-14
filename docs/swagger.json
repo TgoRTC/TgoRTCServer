@@ -829,6 +829,14 @@
                 "type": "string",
                 "description": "设备类型（如 app,web,pc 等）仅在participant.joined 事件中有值",
                 "example": "app"
+              },
+              "missed_uids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "超时的参与者 UID 列表（仅在 participant.missed 事件中有值）",
+                "example": ["user_002", "user_003"]
               }
             }
           }

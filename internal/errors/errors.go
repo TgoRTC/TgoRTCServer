@@ -2,6 +2,7 @@ package errors
 
 import (
 	"fmt"
+	"net/http"
 	"tgo-rtc-server/internal/i18n"
 )
 
@@ -60,11 +61,11 @@ func (e *BusinessError) GetLocalizedMessage(lang string) string {
 }
 
 // GetErrorCode 获取错误代码（字符串格式）
-func (e *BusinessError) GetErrorCode() string {
+func (e *BusinessError) GetErrorCode() int {
 	if e.Code == 0 {
-		return "400"
+		return http.StatusBadRequest
 	}
-	return fmt.Sprintf("%d", e.Code)
+	return e.Code
 }
 
 // IsBusinessError 判断是否为业务错误

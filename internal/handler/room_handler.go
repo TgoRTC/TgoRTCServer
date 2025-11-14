@@ -57,7 +57,7 @@ func (rh *RoomHandler) CreateRoom(c *gin.Context) {
 			logger.Warn("创建房间业务错误",
 				zap.String("error_key", string(businessErr.Key)),
 				zap.String("error_message", businessErr.GetLocalizedMessage(lang)),
-				zap.String("error_code", businessErr.GetErrorCode()),
+				zap.Int("error_code", businessErr.GetErrorCode()),
 				zap.String("creator", req.Creator),
 				zap.String("source_channel_id", req.SourceChannelID),
 				zap.String("language", lang),

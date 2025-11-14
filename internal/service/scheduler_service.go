@@ -13,20 +13,22 @@ import (
 
 // SchedulerService 定时器服务
 type SchedulerService struct {
-	db                     *gorm.DB
-	config                 *config.Config
-	ticker                 *time.Ticker
-	done                   chan bool
-	businessWebhookService *BusinessWebhookService
-	participantService     *ParticipantService
+	db                      *gorm.DB
+	config                  *config.Config
+	ticker                  *time.Ticker
+	done                    chan bool
+	businessWebhookService  *BusinessWebhookService
+	participantService      *ParticipantService
+	participantDeduplicator *utils.ParticipantDeduplicator
 }
 
 // NewSchedulerService 创建定时器服务
 func NewSchedulerService(db *gorm.DB, cfg *config.Config) *SchedulerService {
 	return &SchedulerService{
-		db:     db,
-		config: cfg,
-		done:   make(chan bool),
+		db:                      db,
+		config:                  cfg,
+		done:                    make(chan bool),
+		participantDeduplicator: utils.NewParticipantDeduplicator(),
 	}
 }
 
@@ -80,6 +82,7 @@ func (ss *SchedulerService) Stop() {
 func (ss *SchedulerService) checkParticipantTimeout() {
 	// 获取所有状态为 0（邀请中）的参与者
 	logger := utils.GetLogger()
+	logger.Info("检查超时的参与者---->")
 	var participants []models.Participant
 	if err := ss.db.Where("status = ?", models.ParticipantStatusInviting).Find(&participants).Error; err != nil {
 		logger.Error("查询邀请中的参与者失败",
@@ -92,114 +95,80 @@ func (ss *SchedulerService) checkParticipantTimeout() {
 		return
 	}
 
-	// 获取所有房间的超时配置
+	var missedParticipants []models.Participant
+	for _, p := range participants {
+		nowTime := time.Now().Unix()
+		createdTime := p.CreatedAt.Unix()
+		timeDiff := nowTime - createdTime
+		if timeDiff >= int64(ss.config.LiveKitTimeout) {
+			missedParticipants = append(missedParticipants, p)
+			logger.Info("检查超时的参与者---->发现超时的参与者",
+				zap.String("room_id", p.RoomID),
+				zap.String("uid", p.UID),
+			)
+		}
+	}
+	if len(missedParticipants) == 0 {
+		logger.Info("检查超时的参与者---->未发现超时的参与者")
+		return
+	}
+	var roomIDs []string
+	for _, p := range missedParticipants {
+		roomIDs = append(roomIDs, p.RoomID)
+	}
+	reallyRoomIds := ss.participantDeduplicator.DeduplicateUIDs(roomIDs)
+
 	var rooms []models.Room
-	if err := ss.db.Find(&rooms).Error; err != nil {
-		logger.Error("查询房间失败",
+	if err := ss.db.Where("room_id IN ?", reallyRoomIds).Find(&rooms).Error; err != nil {
+		logger.Error("检查超时的参与者--->查询房间失败",
 			zap.Error(err),
 		)
 		return
 	}
-
-	// 构建房间 ID 到超时时间的映射
-	roomTimeoutMap := make(map[string]int)
-	for _, room := range rooms {
-		// 从 LiveKit Token 生成器获取超时时间
-		// 这里使用配置中的 LiveKitTimeout 作为默认超时时间
-		roomTimeoutMap[room.RoomID] = ss.config.LiveKitTimeout
+	if len(rooms) == 0 {
+		logger.Info("检查超时的参与者--->未找到相关房间")
+		return
 	}
-
-	// 检查每个参与者是否超时
-	now := time.Now()
-	var timeoutParticipants []models.Participant
-
-	for _, participant := range participants {
-		timeout, exists := roomTimeoutMap[participant.RoomID]
-		if !exists {
-			// 如果房间不存在，使用默认超时时间
-			timeout = ss.config.LiveKitTimeout
-		}
-
-		// 计算邀请时间到现在的时间差
-		timeDiff := now.Sub(participant.CreatedAt).Seconds()
-
-		// 如果超过超时时间，标记为超时
-		if int(timeDiff) > timeout {
-			timeoutParticipants = append(timeoutParticipants, participant)
-		}
+	// 分组
+	roomParticipantMap := make(map[string][]models.Participant)
+	for _, p := range missedParticipants {
+		roomParticipantMap[p.RoomID] = append(roomParticipantMap[p.RoomID], p)
 	}
-
-	// 批量更新超时的参与者状态
-	if len(timeoutParticipants) > 0 {
-		var roomIDs []string
-		for _, p := range timeoutParticipants {
-			roomIDs = append(roomIDs, p.RoomID)
+	for roomId, participants := range roomParticipantMap {
+		uids := make([]string, 0, len(participants))
+		for _, p := range participants {
+			uids = append(uids, p.UID)
 		}
-
+		// 更新参与者状态为超时
 		if err := ss.db.Model(&models.Participant{}).
-			Where("room_id IN ?", roomIDs).
+			Where("room_id = ? AND uid IN ?", roomId, uids).
 			Update("status", models.ParticipantStatusMissed).Error; err != nil {
-			logger.Error("更新超时参与者状态失败",
+			logger.Error("检查超时的参与者--->更新参与者状态为超时失败",
+				zap.String("room_id", roomId),
 				zap.Error(err),
 			)
-			return
+			continue
 		}
-		logger.Info("✅ 检查完成: 发现超时的参与者，已更新状态为超时",
-			zap.Int("timeout_count", len(timeoutParticipants)),
-		)
-
-		// 批量查询涉及的所有房间
-		var rooms []models.Room
-		if err := ss.db.Where("room_id IN ?", roomIDs).Find(&rooms).Error; err != nil {
-			logger.Error("批量查询房间失败",
+		// 更新房间状态为超时未接听
+		if err := ss.db.Model(&models.Room{}).
+			Where("room_id = ?", roomId).
+			Update("status", models.RoomStatusMissed).Error; err != nil {
+			logger.Error("检查超时的参与者--->更新房间状态为超时未接听失败",
+				zap.String("room_id", roomId),
 				zap.Error(err),
 			)
-			return
+			continue
 		}
-
-		// 创建 roomID 到 room 对象的映射
-		roomMap := make(map[string]*models.Room)
-		for i := range rooms {
-			roomMap[rooms[i].RoomID] = &rooms[i]
-		}
-
-		// 为每个超时的参与者发送 participant.missed 事件
-		if ss.businessWebhookService != nil {
-			for _, p := range timeoutParticipants {
-				room, exists := roomMap[p.RoomID]
-				if !exists {
-					logger.Error("房间不存在",
-						zap.String("room_id", p.RoomID),
-						zap.String("uid", p.UID),
-					)
-					continue
-				}
-				ss.businessWebhookService.sendParticipantMissed(room, p.UID)
-			}
-			for _, room := range rooms {
-				ss.businessWebhookService.checkAndFinishRoom(&room)
+		var room models.Room
+		for _, r := range rooms {
+			if r.RoomID == roomId {
+				room = r
+				break
 			}
 		}
-
+		// 发送参与者超时事件
+		ss.businessWebhookService.sendParticipantMissed(&room, uids)
+		// 发送房间完成事件
+		ss.businessWebhookService.checkAndFinishRoom(&room)
 	}
 }
-
-// checkAndFinishRoom 检查房间的所有参与者是否都已结束，如果是则将房间状态改为完成
-// func (ss *SchedulerService) checkAndFinishRoom(roomID string) {
-// 	logger := utils.GetLogger()
-
-// 	// 查询房间信息
-// 	var room models.Room
-// 	if err := ss.db.Where("room_id = ?", roomID).First(&room).Error; err != nil {
-// 		logger.Error("查询房间失败",
-// 			zap.String("room_id", roomID),
-// 			zap.Error(err),
-// 		)
-// 		return
-// 	}
-
-// 	// 调用 ParticipantService 的 checkAndFinishRoom 方法
-// 	if ss.businessWebhookService != nil {
-// 		ss.businessWebhookService.checkAndFinishRoom(&room)
-// 	}
-// }

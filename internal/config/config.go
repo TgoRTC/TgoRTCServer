@@ -63,7 +63,7 @@ func LoadConfig() *Config {
 		}
 	}
 
-	liveKitTimeout := 3600 // 默认 1 小时
+	liveKitTimeout := 60 // 默认 1 分钟
 	if timeout := os.Getenv("LIVEKIT_TIMEOUT"); timeout != "" {
 		if t, err := strconv.Atoi(timeout); err == nil {
 			liveKitTimeout = t

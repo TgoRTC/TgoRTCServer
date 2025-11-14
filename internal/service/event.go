@@ -60,6 +60,8 @@ func (ps *BusinessWebhookService) checkAndFinishRoom(room *models.Room) {
 					break
 				}
 			}
+		} else {
+			// 多人通话场景
 		}
 
 		if allFinished {
@@ -269,7 +271,7 @@ func (bws *BusinessWebhookService) sendParticipantRejected(room *models.Room, ui
 }
 
 // 发送参与者超时事件
-func (bws *BusinessWebhookService) sendParticipantMissed(room *models.Room, uid string) {
+func (bws *BusinessWebhookService) sendParticipantMissed(room *models.Room, uids []string) {
 	logger := utils.GetLogger()
 	eventData := &models.ParticipantEventData{
 		RoomEventData: models.RoomEventData{
@@ -284,7 +286,7 @@ func (bws *BusinessWebhookService) sendParticipantMissed(room *models.Room, uid 
 			CreatedAt:         room.CreatedAt.Unix(),
 			UpdatedAt:         room.UpdatedAt.Unix(),
 		},
-		UID: uid,
+		MissedUids: uids,
 	}
 	uids, err := bws.getRoomParticipantsUids(room.RoomID)
 	if err != nil {
@@ -293,13 +295,12 @@ func (bws *BusinessWebhookService) sendParticipantMissed(room *models.Room, uid 
 	eventData.Uids = uids
 	// 发送 participant.missed 事件
 	if err := bws.SendEvent(models.BusinessEventParticipantMissed, eventData); err != nil {
-		logger.Error("发送业务 webhook 事件失败",
+		logger.Error("发送参与者超时事件失败",
 			zap.String("room_id", room.RoomID),
-			zap.String("uid", uid),
+			zap.Strings("uids", uids),
 			zap.String("event_type", models.BusinessEventParticipantMissed),
 			zap.Error(err),
 		)
-		// 不返回错误，继续处理其他参与者
 	}
 }
 
