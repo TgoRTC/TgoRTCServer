@@ -118,7 +118,14 @@ redis:
   address: redis.example.com:6379
   db: 0
 ```
-
+开放端口
+```
+TCP  7880      0.0.0.0/0    # WebSocket 信令
+TCP  7881      0.0.0.0/0    # TCP fallback
+UDP  50000-60000  0.0.0.0/0 # WebRTC 媒体
+UDP  3478      0.0.0.0/0    # STUN/TURN
+TCP  5349      0.0.0.0/0    # TURN over TLS (可选)
+```
 **TgoRTC Server 配置：**
 ```env
 # 使用负载均衡器地址或任一 LiveKit 服务器地址

@@ -71,6 +71,7 @@ func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.Create
 	deduplicatedUIDs := rs.participantDeduplicator.DeduplicateUIDs(req.UIDs)
 	deduplicatedUIDs = rs.participantDeduplicator.RemoveDuplicateUIDs(deduplicatedUIDs, req.Creator)
 	isBusy := false
+	var busyParticipantUID string
 	// 6. 检查 UIDs 中的用户是否在通话中
 	if len(deduplicatedUIDs) > 0 {
 		var busyParticipant models.Participant
@@ -79,6 +80,7 @@ func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.Create
 			First(&busyParticipant).Error; err == nil {
 			// 返回 409 Conflict 状态码，表示用户正在通话中
 			isBusy = true
+			busyParticipantUID = busyParticipant.UID
 			//return nil, errors.NewConflictError(i18n.ParticipantInCall, busyParticipant.UID)
 		} else if err != gorm.ErrRecordNotFound {
 			return nil, errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
@@ -148,7 +150,7 @@ func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.Create
 	}
 	// 如果正在通话中直接返回错误，不能返回房间信息
 	if isBusy {
-		return nil, errors.NewConflictError(i18n.ParticipantInCall)
+		return nil, errors.NewConflictError(i18n.ParticipantInCall, busyParticipantUID)
 	}
 	// 生成 Token 和获取配置信息
 	tokenResult, err := rs.tokenGenerator.GenerateTokenWithConfig(roomID, req.Creator)

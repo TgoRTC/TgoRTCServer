@@ -172,6 +172,11 @@ func (ps *ParticipantService) LeaveRoom(req *models.LeaveRoomRequest) error {
 			currentParticipant = p
 		}
 		uids = append(uids, p.UID)
+		logger.Info("参与者状态",
+			zap.String("room_id", req.RoomID),
+			zap.String("uid", p.UID),
+			zap.Int("status", int(p.Status)),
+		)
 		if p.Status == models.ParticipantStatusJoined || p.Status == models.ParticipantStatusHangup {
 			joinedCount++
 		}
@@ -187,17 +192,28 @@ func (ps *ParticipantService) LeaveRoom(req *models.LeaveRoomRequest) error {
 	if currentParticipant.Status == models.ParticipantStatusJoined || currentParticipant.LeaveTime > 0 {
 		hasJoined = true
 	}
+	logger.Error("离开房间各个状态：",
+		zap.String("room_id", req.RoomID),
+		zap.String("uid", req.UID),
+		zap.Int("joinedCount", joinedCount),
+		zap.Bool("isCreator", isCreator),
+		zap.Bool("isOneToOne", isOneToOne),
+		zap.Bool("hasJoined", hasJoined),
+	)
 	// 统计已加入的参与者数量
 	if isOneToOne {
 		// 一对一通话场景（MaxParticipants = 2）
 		if isCreator {
 			// 情况1：发起者主动挂断
-			switch joinedCount {
-			case 1:
-				// 只有发起者自己加入，对方还未加入 -> 取消通话
+			// switch joinedCount {
+			// case 1:
+			// 	// 只有发起者自己加入，对方还未加入 -> 取消通话
+			// 	return ps.handleCreatorCancelCall(&room, uids)
+			// case 2:
+			// 	// 情况3：双方都已加入 -> 结束通话挂断（走默认逻辑）
+			// }
+			if joinedCount <= 1 {
 				return ps.handleCreatorCancelCall(&room, uids)
-			case 2:
-				// 情况3：双方都已加入 -> 结束通话挂断（走默认逻辑）
 			}
 		} else {
 			// 情况2：非发起者离开（对方拒绝通话或挂断）
@@ -410,19 +426,39 @@ func (ps *ParticipantService) InviteParticipants(req *models.InviteParticipantRe
 		return errors.NewBusinessErrorWithKey(i18n.RoomFull)
 	}
 
-	// 在事务中为每个 UID 创建参与者记录
-	// 确保要么所有用户都被邀请成功，要么都失败
-	// 如果任何操作失败，事务会自动回滚
+	// 批量查询该房间中已存在的参与者（限定在 req.UIDs 范围内）
+	var existingParticipants []models.Participant
+	if err := ps.db.Where("room_id = ? AND uid IN ?", req.RoomID, req.UIDs).
+		Find(&existingParticipants).Error; err != nil {
+		return errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
+	}
+
+	// 构建已存在 uid 的 map，便于快速查找
+	existingUIDMap := make(map[string]models.Participant)
+	for _, p := range existingParticipants {
+		existingUIDMap[p.UID] = p
+	}
+
+	// 在事务中处理：已存在的更新状态，不存在的创建新记录
 	err := ps.db.Transaction(func(tx *gorm.DB) error {
 		for _, uid := range req.UIDs {
-			participant := models.Participant{
-				RoomID: req.RoomID,
-				UID:    uid,
-				Status: models.ParticipantStatusInviting,
-			}
-			if err := tx.Create(&participant).Error; err != nil {
-				// 返回多语言错误消息
-				return errors.NewBusinessErrorWithKey(i18n.InvitedParticipantAddFailed, err.Error())
+			if existingParticipant, exists := existingUIDMap[uid]; exists {
+				// 参与者已存在，更新状态为邀请中
+				if err := tx.Model(&models.Participant{}).
+					Where("id = ?", existingParticipant.ID).
+					Update("status", models.ParticipantStatusInviting).Error; err != nil {
+					return errors.NewBusinessErrorWithKey(i18n.ParticipantStatusUpdateFailed, err.Error())
+				}
+			} else {
+				// 参与者不存在，创建新记录
+				participant := models.Participant{
+					RoomID: req.RoomID,
+					UID:    uid,
+					Status: models.ParticipantStatusInviting,
+				}
+				if err := tx.Create(&participant).Error; err != nil {
+					return errors.NewBusinessErrorWithKey(i18n.InvitedParticipantAddFailed, err.Error())
+				}
 			}
 		}
 		return nil

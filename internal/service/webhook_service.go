@@ -327,6 +327,10 @@ func (ws *WebhookService) handleParticipantLeft(event *models.WebhookEvent) erro
 	}
 	// 如果房间已经结束或取消，则跳过
 	if room.Status > models.RoomStatusInProgress {
+		logger.Error("livekit事件: 参与者离开--->房间状态已经修改，跳过参与者离开事件",
+			zap.String("room_id", event.Room.Name),
+			zap.Uint8("room_status", room.Status),
+		)
 		return nil
 	}
 
@@ -405,9 +409,9 @@ func (ws *WebhookService) handleParticipantLeft(event *models.WebhookEvent) erro
 			return err
 		}
 
-		// 如果另外一个参与者 status=0（邀请中），将其改为 ParticipantStatusTimeout
+		// 修改另外一个参与者的状态
 		if err := ws.db.Model(&models.Participant{}).
-			Where("room_id = ? AND uid != ? AND status = ?", event.Room.Name, event.Participant.Identity, models.ParticipantStatusInviting).
+			Where("room_id = ? AND uid != ?", event.Room.Name, event.Participant.Identity).
 			Update("status", otherParticipantStatus).Error; err != nil {
 			logger.Error("livekit事件: 参与者离开--->更新其他参与者状态失败",
 				zap.String("room_id", event.Room.Name),
