@@ -163,7 +163,6 @@ func (ws *WebhookService) handleRoomFinished(event *models.WebhookEvent) error {
 		zap.String("room_name", event.Room.Name),
 		zap.String("room_sid", event.Room.SID),
 	)
-
 	// 更新房间状态为已结束
 	if err := ws.db.Model(&models.Room{}).
 		Where("room_id = ?", event.Room.Name).
@@ -223,7 +222,6 @@ func (ws *WebhookService) handleParticipantJoined(event *models.WebhookEvent) er
 	if event.Room == nil || event.Participant == nil {
 		return nil
 	}
-
 	logger.Info("参与者已加入",
 		zap.String("participant_name", event.Participant.Name),
 		zap.String("participant_identity", event.Participant.Identity),
