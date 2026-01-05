@@ -44,7 +44,13 @@ func (rh *RoomHandler) CreateRoom(c *gin.Context) {
 		utils.RespondWithBindError(c)
 		return
 	}
-
+	if req.DeviceType == "" {
+		logger.Error("创建房间参数 device_type 缺失",
+			zap.String("language", lang),
+		)
+		utils.RespondWithBindError(c)
+		return
+	}
 	resp, err := rh.roomService.CreateRoom(&req)
 	if err != nil {
 		if businessErr, ok := err.(*errors.BusinessError); ok {

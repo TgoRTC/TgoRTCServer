@@ -190,6 +190,13 @@ paths:
             type: string
           description: 用户 ID
           example: "user_001"
+        - name: device_type
+          in: query
+          required: true
+          schema:
+            type: string
+          description: 设备类型 app,web,pc 等
+          example: "app"
       responses:
         '200':
           description: 查询成功
@@ -396,6 +403,7 @@ paths:
                   created_at: 1704096500
                   updated_at: 1704096700
                   uid: "user_002"
+                  device_type: "app"
               participant.left:
                 summary: 参与者已离开事件
                 description: "请求 URL: /tgortc/webhook?event_type=participant.left&event_id=1704096800-ghi789"
@@ -463,6 +471,10 @@ components:
             type: string
           description: 邀请的用户 ID 列表
           example: ["user_002", "user_003"]
+        device_type:
+          type: string
+          description: 设备类型（如 app,web,pc 等）
+          example: "app"
 
     CreateRoomResponse:
       type: object
@@ -527,6 +539,10 @@ components:
           type: string
           description: 用户 ID
           example: "user_002"
+        device_type:
+          type: string
+          description: 设备类型（如 app,web,pc 等）
+          example: "app"
 
     # JoinRoomResponse 和 CreateRoomResponse 使用相同的结构
     # 为了保持向后兼容，这里使用引用
@@ -758,4 +774,8 @@ components:
               type: string
               description: 操作者 UID（加入者/离开者/拒绝者等）
               example: "user_002"
+            device_type:
+              type: string
+              description: 设备类型（如 app,web,pc 等）仅在participant.joined 事件中有值
+              example: "app"
 

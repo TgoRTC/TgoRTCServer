@@ -54,6 +54,7 @@
                   },
                   "room_id": {
                     "type": "string",
+                    "description": "房间 ID（可选，不传则自动生成）",
                     "example": "room_abc123"
                   },
                   "rtc_type": {
@@ -78,6 +79,12 @@
                       "type": "string"
                     },
                     "example": ["user_002", "user_003"]
+                  },
+                  "device_type": {
+                    "required": true,
+                    "type": "string",
+                    "description": "设备类型（如 app,web,pc 等）",
+                    "example": "app"
                   }
                 }
               }
@@ -282,6 +289,11 @@
                 "properties": {
                   "uid": {
                     "type": "string"
+                  },
+                  "device_type": {
+                    "type": "string",
+                    "description": "设备类型（如 app,web,pc 等）",
+                    "example": "app"
                   }
                 }
               }
@@ -421,6 +433,16 @@
             },
             "description": "用户 ID",
             "example": "user_001"
+          },
+          {
+            "name": "device_type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "设备类型 app,web,pc 等",
+            "example": "app"
           }
         ],
         "responses": {
@@ -671,7 +693,8 @@
                     "uids": ["user_001", "user_002"],
                     "created_at": 1704096500,
                     "updated_at": 1704096700,
-                    "uid": "user_002"
+                    "uid": "user_002",
+                    "device_type": "app"
                   }
                 },
                 "participant.left": {
@@ -801,6 +824,11 @@
                 "type": "string",
                 "description": "操作者 UID（加入者/离开者/拒绝者等）",
                 "example": "user_002"
+              },
+              "device_type": {
+                "type": "string",
+                "description": "设备类型（如 app,web,pc 等）仅在participant.joined 事件中有值",
+                "example": "app"
               }
             }
           }

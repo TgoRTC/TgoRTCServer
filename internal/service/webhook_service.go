@@ -222,10 +222,28 @@ func (ws *WebhookService) handleParticipantJoined(event *models.WebhookEvent) er
 	if event.Room == nil || event.Participant == nil {
 		return nil
 	}
+
+	// 解析参与者的 metadata 获取 device_type
+	var deviceType string
+	if event.Participant.Metadata != "" {
+		var metadata struct {
+			DeviceType string `json:"device_type"`
+		}
+		if err := json.Unmarshal([]byte(event.Participant.Metadata), &metadata); err != nil {
+			logger.Warn("解析参与者 metadata 失败",
+				zap.String("metadata", event.Participant.Metadata),
+				zap.Error(err),
+			)
+		} else {
+			deviceType = metadata.DeviceType
+		}
+	}
+
 	logger.Info("参与者已加入",
 		zap.String("participant_name", event.Participant.Name),
 		zap.String("participant_identity", event.Participant.Identity),
 		zap.String("room_name", event.Room.Name),
+		zap.String("device_type", deviceType),
 	)
 
 	// 1、判断参与者是否在 rtc_participant 表存在
@@ -234,10 +252,11 @@ func (ws *WebhookService) handleParticipantJoined(event *models.WebhookEvent) er
 		if err == gorm.ErrRecordNotFound {
 			// 参与者不存在，插入一条新记录
 			participant = models.Participant{
-				RoomID:   event.Room.Name,
-				UID:      event.Participant.Identity,
-				Status:   models.ParticipantStatusJoined,
-				JoinTime: time.Now().Unix(),
+				RoomID:     event.Room.Name,
+				UID:        event.Participant.Identity,
+				DeviceType: deviceType,
+				Status:     models.ParticipantStatusJoined,
+				JoinTime:   time.Now().Unix(),
 			}
 			if err := ws.db.Create(&participant).Error; err != nil {
 				logger.Error("创建参与者记录失败",
@@ -250,6 +269,7 @@ func (ws *WebhookService) handleParticipantJoined(event *models.WebhookEvent) er
 			logger.Info("参与者记录已创建",
 				zap.String("room_id", event.Room.Name),
 				zap.String("uid", event.Participant.Identity),
+				zap.String("device_type", deviceType),
 			)
 		} else {
 			logger.Error("查询参与者记录失败",
@@ -262,8 +282,9 @@ func (ws *WebhookService) handleParticipantJoined(event *models.WebhookEvent) er
 	} else {
 		// 参与者已存在，更新状态为已加入
 		if err := ws.db.Model(&participant).Updates(map[string]interface{}{
-			"status":    models.ParticipantStatusJoined,
-			"join_time": time.Now().Unix(),
+			"status":      models.ParticipantStatusJoined,
+			"join_time":   time.Now().Unix(),
+			"device_type": deviceType,
 		}).Error; err != nil {
 			logger.Error("更新参与者状态失败",
 				zap.String("room_id", event.Room.Name),
@@ -275,6 +296,7 @@ func (ws *WebhookService) handleParticipantJoined(event *models.WebhookEvent) er
 		logger.Info("参与者状态已更新为已加入",
 			zap.String("room_id", event.Room.Name),
 			zap.String("uid", event.Participant.Identity),
+			zap.String("device_type", deviceType),
 		)
 	}
 
@@ -288,7 +310,7 @@ func (ws *WebhookService) handleParticipantJoined(event *models.WebhookEvent) er
 				zap.Error(err),
 			)
 		} else {
-			ws.businessWebhookService.sendParticipantJoined(&room, participant.UID)
+			ws.businessWebhookService.sendParticipantJoined(&room, participant.UID, deviceType)
 			// 构建事件数据
 		}
 	}

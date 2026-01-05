@@ -1,24 +1,4 @@
 # TgoRTC Server
-最安全可靠的配置：
-
-                                              ┌─────────────────────┐
-                                              │   LiveKit 节点 1    │
-┌────────┐  https://domain:443   ┌───────┐   │  TURN/TLS:5349     │
-│        │ ───────────────────> │       │──>│  (证书A)            │
-│ 客户端 │    ✅ SSL (Nginx证书)│ Nginx │   └─────────────────────┘
-│        │                      │(证书A)│   ┌─────────────────────┐
-│        │                      │       │──>│   LiveKit 节点 2    │
-│        │                      └───────┘   │  TURN/TLS:5349     │
-│        │                                  │  (证书A)            │
-│        │  TLS:5349 (如果需要穿透防火墙)   └─────────────────────┘
-│        │ ────────────────────────────────>┌─────────────────────┐
-│        │    ✅ SSL (TURN证书，可以同一份) │   LiveKit 节点 3    │
-└────────┘                                  │  TURN/TLS:5349     │
-                                            │  (证书A)            │
-                                            └─────────────────────┘
-
-证书情况：
-- Nginx 和所有 LiveKit 节点可以用同一份证书（比如通配符证书 *.domain.com）
 
 基于 LiveKit 的实时音视频通话服务，提供房间管理、参与者管理和通话状态查询等功能。
 
@@ -33,7 +13,7 @@
 
 ## 技术栈
 
-- **Go 1.24+** - 后端开发语言
+- **Go 1.23+** - 后端开发语言
 - **Gin** - Web 框架
 - **GORM** - ORM 框架
 - **MySQL 8.0+** - 数据库
@@ -46,148 +26,90 @@
 
 ```bash
 # 克隆项目
-git clone https://github.com/TgoRTC/TgoRTCServer.git
+git clone https://github.com/panyuQ/TgoRTCServer.git
 cd TgoRTCServer
 
 # 配置环境变量
 cp .env.example .env
-# 编辑 .env 文件，配置数据库和 LiveKit 连接信息
+# 编辑 .env 文件，配置数据库、Redis 和 LiveKit 连接信息
 ```
 
-### 2. 启动服务
+### 2. 本地开发
 
 ```bash
-# 本地开发
-go run main.go
+# 直接运行
+make run
 
-# 或使用 Docker Compose
-docker-compose -f docker-compose.prod.yml up -d
+# 或构建后运行
+make build
+./tgo-rtc-server
 ```
 
-### 3. 访问服务
+### 3. Docker 部署
+
+```bash
+# 构建并推送镜像
+make deploy
+
+# 启动所有服务
+make up
+
+# 查看日志
+make logs
+
+# 更新服务（拉取最新镜像并重启）
+make update
+
+# 停止服务
+make stop
+```
+
+### 4. 访问服务
 
 - **API 服务**: http://localhost:8080
 - **Swagger 文档**: http://localhost:8080/swagger/index.html
 - **健康检查**: http://localhost:8080/health
 
-## LiveKit 多服务器部署
-
-TgoRTC Server 支持连接到 LiveKit 集群，实现高可用和负载均衡。
-
-### 部署架构
+## 项目结构
 
 ```
-┌─────────────────┐
-│  TgoRTC Server  │
-│   (业务层)       │
-└────────┬────────┘
-         │
-         ├─────────────────────────────┐
-         │                             │
-    ┌────▼─────┐                 ┌────▼─────┐
-    │ LiveKit  │                 │ LiveKit  │
-    │ Server 1 │◄───────────────►│ Server 2 │
-    └──────────┘                 └──────────┘
-         │                             │
-         └─────────────┬───────────────┘
-                       │
-                  ┌────▼─────┐
-                  │  Redis   │
-                  │ (信令同步) │
-                  └──────────┘
+TgoRTCServer/
+├── main.go                 # 入口文件
+├── Dockerfile              # Docker 构建文件
+├── docker-compose.yml      # 服务编排配置
+├── Makefile                # 构建部署命令
+├── internal/               # 内部代码
+│   ├── config/             # 配置管理
+│   ├── database/           # 数据库连接和迁移
+│   ├── handler/            # HTTP 处理器
+│   ├── models/             # 数据模型
+│   ├── router/             # 路由配置
+│   ├── service/            # 业务逻辑
+│   └── utils/              # 工具函数
+├── migrations/             # 数据库迁移脚本
+└── docs/                   # 文档
 ```
 
-### 配置说明
+## 环境变量配置
 
-#### 1. 单 LiveKit 服务器
-
-**TgoRTC Server 配置（.env）：**
 ```env
-LIVEKIT_URL=http://livekit.example.com:7880
-LIVEKIT_API_KEY=devkey
-LIVEKIT_API_SECRET=secret
-```
+# 数据库配置
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=your_password
+DB_NAME=tgo_rtc
 
-**LiveKit Server 配置（livekit.yaml）：**
-```yaml
-port: 7880
-keys:
-  devkey: secret  # 与 .env 中的 API_KEY 和 SECRET 对应
-```
+# Redis 配置
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=your_password
 
-**说明：** LiveKit 的 API Key 和 Secret 是在 `livekit.yaml` 中自己定义的，然后在 TgoRTC Server 的 `.env` 文件中配置相同的值。
-
-#### 2. LiveKit 集群（多服务器）
-
-LiveKit 支持通过 Redis 实现多服务器集群：
-
-**LiveKit Server 1 配置：**
-```yaml
-# livekit-server1.yaml
-port: 7880
-redis:
-  address: redis.example.com:6379
-  db: 0
-```
-
-**LiveKit Server 2 配置：**
-```yaml
-# livekit-server2.yaml
-port: 7880
-redis:
-  address: redis.example.com:6379
-  db: 0
-```
-开放端口
-```
-TCP  7880      0.0.0.0/0    # WebSocket 信令
-TCP  7881      0.0.0.0/0    # TCP fallback
-UDP  50000-60000  0.0.0.0/0 # WebRTC 媒体
-UDP  3478      0.0.0.0/0    # STUN/TURN
-TCP  5349      0.0.0.0/0    # TURN over TLS (可选)
-```
-**TgoRTC Server 配置：**
-```env
-# 使用负载均衡器地址或任一 LiveKit 服务器地址
-LIVEKIT_URL=http://livekit-lb.example.com:7880
+# LiveKit 配置
+LIVEKIT_URL=http://localhost:7880
 LIVEKIT_API_KEY=your_api_key
 LIVEKIT_API_SECRET=your_api_secret
 ```
-
-### 负载均衡
-
-使用 Nginx 作为 LiveKit 集群的负载均衡器：
-
-**Nginx 配置示例：**
-```nginx
-upstream livekit_cluster {
-    server livekit1.example.com:7880;
-    server livekit2.example.com:7880;
-}
-
-server {
-    listen 80;
-    server_name livekit.example.com;
-
-    location / {
-        proxy_pass http://livekit_cluster;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-### 集群优势
-
-- ✅ **高可用** - 单个 LiveKit 服务器故障不影响整体服务
-- ✅ **负载均衡** - 自动分配房间到不同服务器
-- ✅ **水平扩展** - 根据负载动态增加服务器
-- ✅ **信令同步** - 通过 Redis 实现服务器间通信
 
 ## API 接口
 
@@ -204,23 +126,31 @@ server {
 
 详细 API 文档请访问 Swagger UI。
 
-## 测试
+## Make 命令
 
 ```bash
-# 运行 E2E 测试
-make e2e-local
-
-# 查看测试指南
-cat scripts/E2E_TEST_GUIDE.md
+make help       # 显示帮助信息
+make build      # 构建本地二进制
+make run        # 本地运行
+make test       # 运行测试
+make fmt        # 格式化代码
+make deploy     # 构建并推送镜像
+make up         # 启动服务
+make update     # 更新服务
+make stop       # 停止服务
+make logs       # 查看日志
 ```
 
-## 部署
+## 二次开发
 
-详细部署文档请参考：
+如需修改镜像仓库地址，只需编辑 `Makefile` 中的配置：
 
-- [Docker Compose 部署](docs/guides/DOCKER_COMPOSE_DEPLOYMENT.md)
-- [集群部署指南](docs/guides/CLUSTER_DEPLOYMENT.md)
-- [快速参考](docs/guides/QUICK_REFERENCE.md)
+```makefile
+REGISTRY := your-registry.com
+NAMESPACE := your-namespace
+IMAGE_NAME := your-image-name
+TAG := latest
+```
 
 ## 许可证
 
@@ -228,6 +158,5 @@ MIT License
 
 ## 联系方式
 
-- GitHub: https://github.com/TgoRTC/TgoRTCServer
-- Issues: https://github.com/TgoRTC/TgoRTCServer/issues
-
+- GitHub: https://github.com/panyuQ/TgoRTCServer
+- Issues: https://github.com/panyuQ/TgoRTCServer/issues

@@ -57,6 +57,7 @@ type CreateRoomRequest struct {
 	InviteOn          uint8    `json:"invite_on"`        // 0: 否, 1: 是
 	MaxParticipants   int      `json:"max_participants"` // 最多参与者数，默认 2
 	UIDs              []string `json:"uids"`             // 邀请的用户 ID 列表
+	DeviceType        string   `json:"device_type"`      // 设备类型
 }
 
 // RoomResp 房间响应（创建房间和加入房间共用）

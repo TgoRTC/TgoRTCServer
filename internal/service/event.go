@@ -174,7 +174,7 @@ func (bws *BusinessWebhookService) sendRoomFinished(room *models.Room, duration 
 }
 
 // 发送参与者加入事件
-func (bws *BusinessWebhookService) sendParticipantJoined(room *models.Room, uid string) {
+func (bws *BusinessWebhookService) sendParticipantJoined(room *models.Room, uid string, deviceType string) {
 	logger := utils.GetLogger()
 	eventData := &models.ParticipantEventData{
 		RoomEventData: models.RoomEventData{
@@ -189,7 +189,8 @@ func (bws *BusinessWebhookService) sendParticipantJoined(room *models.Room, uid 
 			CreatedAt:         room.CreatedAt.Unix(),
 			UpdatedAt:         room.UpdatedAt.Unix(),
 		},
-		UID: uid, // 加入者 UID
+		UID:        uid,        // 加入者 UID
+		DeviceType: deviceType, // 设备类型
 	}
 	uids, err := bws.getRoomParticipantsUids(room.RoomID)
 	if err != nil {

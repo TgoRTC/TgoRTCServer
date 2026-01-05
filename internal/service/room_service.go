@@ -78,7 +78,6 @@ func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.Create
 		if err := rs.db.Where("uid IN ? AND (status = ? OR status = ?)",
 			deduplicatedUIDs, models.ParticipantStatusInviting, models.ParticipantStatusJoined).
 			First(&busyParticipant).Error; err == nil {
-			// 返回 409 Conflict 状态码，表示用户正在通话中
 			isBusy = true
 			busyParticipantUID = busyParticipant.UID
 			//return nil, errors.NewConflictError(i18n.ParticipantInCall, busyParticipant.UID)
@@ -121,9 +120,10 @@ func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.Create
 
 		// 添加创建者
 		participants = append(participants, models.Participant{
-			RoomID: roomID,
-			UID:    req.Creator,
-			Status: uint8(participantStatus),
+			RoomID:     roomID,
+			UID:        req.Creator,
+			DeviceType: req.DeviceType,
+			Status:     uint8(participantStatus),
 		})
 
 		// 添加去重后的邀请用户
@@ -153,7 +153,7 @@ func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.Create
 		return nil, errors.NewConflictError(i18n.ParticipantInCall, busyParticipantUID)
 	}
 	// 生成 Token 和获取配置信息
-	tokenResult, err := rs.tokenGenerator.GenerateTokenWithConfig(roomID, req.Creator)
+	tokenResult, err := rs.tokenGenerator.GenerateTokenWithConfig(roomID, req.Creator, req.DeviceType)
 	if err != nil {
 		return nil, errors.NewBusinessErrorWithKey(i18n.TokenGenerationFailed, err.Error())
 	}

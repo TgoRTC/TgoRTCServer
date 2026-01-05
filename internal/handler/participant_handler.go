@@ -47,7 +47,13 @@ func (ph *ParticipantHandler) JoinRoom(c *gin.Context) {
 		utils.RespondWithBindError(c)
 		return
 	}
-
+	if req.DeviceType == "" {
+		logger.Error("加入房间参数 device_type 缺失",
+			zap.String("language", lang),
+		)
+		utils.RespondWithBindError(c)
+		return
+	}
 	// 从 URL 参数中获取 room_id
 	req.RoomID = roomID
 
@@ -209,8 +215,15 @@ func (ph *ParticipantHandler) GetUserAvailableRooms(c *gin.Context) {
 		utils.RespondWithBindError(c)
 		return
 	}
-
-	data, err := ph.participantService.GetUserAvailableRooms(uid)
+	deviceType := c.Query("device_type")
+	if deviceType == "" {
+		logger.Error("获取用户可加入房间列表参数 device_type 缺失",
+			zap.String("language", lang),
+		)
+		utils.RespondWithBindError(c)
+		return
+	}
+	data, err := ph.participantService.GetUserAvailableRooms(uid, deviceType)
 	if err != nil {
 		logger.Error("获取用户可加入房间列表失败",
 			zap.Error(err),

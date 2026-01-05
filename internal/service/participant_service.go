@@ -72,16 +72,21 @@ func (ps *ParticipantService) JoinRoom(req *models.JoinRoomRequest) (*models.Joi
 	var existingParticipant models.Participant
 	if err := ps.db.Where("room_id = ? AND uid = ?", req.RoomID, req.UID).First(&existingParticipant).Error; err == nil {
 		// 参与者已存在，更新状态为已加入
-		if err := ps.db.Model(&existingParticipant).Update("status", models.ParticipantStatusJoined).Update("join_time", time.Now().Unix()).Error; err != nil {
+		if err := ps.db.Model(&existingParticipant).Updates(map[string]interface{}{
+			"status":      models.ParticipantStatusJoined,
+			"join_time":   time.Now().Unix(),
+			"device_type": req.DeviceType,
+		}).Error; err != nil {
 			return nil, errors.NewBusinessErrorWithKey(i18n.ParticipantStatusUpdateFailed, err.Error())
 		}
 	} else if err == gorm.ErrRecordNotFound {
 		// 创建新的参与者记录
 		participant := models.Participant{
-			RoomID:   req.RoomID,
-			UID:      req.UID,
-			Status:   models.ParticipantStatusJoined,
-			JoinTime: time.Now().Unix(),
+			RoomID:     req.RoomID,
+			UID:        req.UID,
+			DeviceType: req.DeviceType,
+			Status:     models.ParticipantStatusJoined,
+			JoinTime:   time.Now().Unix(),
 		}
 		if err := ps.db.Create(&participant).Error; err != nil {
 			return nil, errors.NewBusinessErrorWithKey(i18n.ParticipantAddFailed, err.Error())
@@ -91,7 +96,7 @@ func (ps *ParticipantService) JoinRoom(req *models.JoinRoomRequest) (*models.Joi
 	}
 
 	// 生成 Token 和获取配置信息
-	tokenResult, err := ps.tokenGenerator.GenerateTokenWithConfig(req.RoomID, req.UID)
+	tokenResult, err := ps.tokenGenerator.GenerateTokenWithConfig(req.RoomID, req.UID, req.DeviceType)
 	if err != nil {
 		return nil, errors.NewBusinessErrorWithKey(i18n.TokenGenerationFailed, err.Error())
 	}
@@ -470,7 +475,7 @@ func (ps *ParticipantService) InviteParticipants(req *models.InviteParticipantRe
 // GetUserAvailableRooms 获取用户可加入的房间列表
 // 查询该用户被邀请（status=0）或已加入（status=1）的所有房间
 // 返回 RoomResp 数组
-func (ps *ParticipantService) GetUserAvailableRooms(uid string) ([]models.RoomResp, error) {
+func (ps *ParticipantService) GetUserAvailableRooms(uid string, deviceType string) ([]models.RoomResp, error) {
 	// 查询用户的参与者记录（邀请中或已加入）
 	var participants []models.Participant
 	if err := ps.db.Where("uid = ? AND status IN ?", uid, []int{models.ParticipantStatusInviting, models.ParticipantStatusJoined}).
@@ -486,6 +491,12 @@ func (ps *ParticipantService) GetUserAvailableRooms(uid string) ([]models.RoomRe
 	// 提取所有房间 ID
 	roomIDs := make([]string, 0, len(participants))
 	for _, p := range participants {
+
+		// 如果参与者正在通话，且设备类型不匹配，则跳过
+		if p.Status == models.ParticipantStatusJoined && p.DeviceType != deviceType {
+			continue
+		}
+
 		roomIDs = append(roomIDs, p.RoomID)
 	}
 
@@ -499,8 +510,18 @@ func (ps *ParticipantService) GetUserAvailableRooms(uid string) ([]models.RoomRe
 	// 构建返回结果
 	result := make([]models.RoomResp, 0, len(rooms))
 	for _, room := range rooms {
+		tempDeviceType := ""
+		for _, p := range participants {
+			if p.RoomID == room.RoomID && p.UID == uid {
+				tempDeviceType = p.DeviceType
+				break
+			}
+		}
+		if tempDeviceType == "" {
+			tempDeviceType = deviceType
+		}
 		// 为每个房间生成 Token
-		tokenResult, err := ps.tokenGenerator.GenerateTokenWithConfig(room.RoomID, uid)
+		tokenResult, err := ps.tokenGenerator.GenerateTokenWithConfig(room.RoomID, uid, tempDeviceType)
 		if err != nil {
 			return nil, errors.NewBusinessErrorWithKey(i18n.TokenGenerationFailed, err.Error())
 		}
