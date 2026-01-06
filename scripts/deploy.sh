@@ -128,6 +128,7 @@ get_public_ip() {
 }
 
 # 获取服务器地址（公网IP或用户指定）
+# 注意：此函数只输出 IP 地址，不输出日志（避免污染变量捕获）
 get_server_host() {
     # 1. 优先使用环境变量
     if [ -n "$SERVER_HOST" ]; then
@@ -136,11 +137,9 @@ get_server_host() {
     fi
     
     # 2. 尝试获取公网 IP
-    log_info "检测服务器公网 IP..."
     local public_ip=$(get_public_ip)
     
     if [ -n "$public_ip" ]; then
-        log_success "  检测到公网 IP: $public_ip"
         echo "$public_ip"
         return
     fi
@@ -155,13 +154,11 @@ get_server_host() {
     fi
     
     if [ -n "$private_ip" ]; then
-        log_warn "  未能获取公网 IP，使用内网 IP: $private_ip"
         echo "$private_ip"
         return
     fi
     
     # 4. 都失败则使用占位符
-    log_warn "  无法自动检测 IP，请手动配置 SERVER_HOST"
     echo "YOUR_SERVER_IP"
 }
 
@@ -350,7 +347,13 @@ generate_configs() {
     cd "$DEPLOY_DIR"
     
     # 获取服务器地址
+    log_info "检测服务器公网 IP..."
     local server_host=$(get_server_host)
+    if [ "$server_host" = "YOUR_SERVER_IP" ]; then
+        log_warn "  无法自动检测 IP，请手动配置 SERVER_HOST"
+    else
+        log_success "  检测到 IP: ${server_host}"
+    fi
     
     # 生成随机密码和密钥
     DB_PASSWORD=$(generate_password)
