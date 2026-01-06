@@ -69,7 +69,16 @@ NC='\033[0m'
 # ============================================================================
 # 配置变量
 # ============================================================================
-DEPLOY_DIR="${DEPLOY_DIR:-$(pwd)}"
+# 部署目录（默认当前目录，或 ~/tgortc）
+if [ -z "$DEPLOY_DIR" ]; then
+    # 如果当前目录是 home 目录，则使用 ~/tgortc
+    if [ "$(pwd)" = "$HOME" ]; then
+        DEPLOY_DIR="$HOME/tgortc"
+        mkdir -p "$DEPLOY_DIR"
+    else
+        DEPLOY_DIR="$(pwd)"
+    fi
+fi
 # Docker 镜像地址
 # 默认使用阿里云公开镜像，可通过环境变量覆盖
 # 示例: DOCKER_IMAGE=your-image:tag ./deploy.sh
@@ -84,6 +93,26 @@ SERVER_HOST="${SERVER_HOST:-}"
 
 # 中国镜像模式（通过 --cn 参数启用）
 USE_CN_MIRROR="${USE_CN_MIRROR:-false}"
+
+# 检测是否为交互模式（管道执行时为非交互模式）
+is_interactive() {
+    # 如果 stdin 是终端，则为交互模式
+    [ -t 0 ]
+}
+
+# 非交互模式下的默认确认（自动选择 Y）
+auto_confirm() {
+    local prompt="$1"
+    local default="${2:-Y}"
+    
+    if is_interactive; then
+        read -p "$prompt" response
+        echo "$response"
+    else
+        # 非交互模式，返回默认值
+        echo "$default"
+    fi
+}
 
 # ============================================================================
 # Docker 命令包装器（自动处理 sudo 权限）
@@ -353,7 +382,13 @@ check_requirements() {
     if ! command -v docker &> /dev/null; then
         log_warn "Docker 未安装"
         echo ""
-        read -p "是否自动安装 Docker？[Y/n]: " install_docker_confirm
+        local install_docker_confirm
+        if is_interactive; then
+            read -p "是否自动安装 Docker？[Y/n]: " install_docker_confirm
+        else
+            log_info "非交互模式，自动安装 Docker..."
+            install_docker_confirm="Y"
+        fi
         if [[ ! "$install_docker_confirm" =~ ^[Nn]$ ]]; then
             install_docker
         else
@@ -364,11 +399,21 @@ check_requirements() {
     fi
     log_success "  Docker 已安装: $(docker --version | head -1)"
     
-    # 检查是否配置了镜像加速器
+    # 检查是否配置了镜像加速器（中国镜像模式或未配置时）
     if ! grep -q "registry-mirrors" /etc/docker/daemon.json 2>/dev/null; then
-        log_warn "  未配置 Docker 镜像加速器"
-        read -p "是否配置镜像加速器（国内服务器推荐）？[Y/n]: " config_mirror
-        if [[ ! "$config_mirror" =~ ^[Nn]$ ]]; then
+        if [ "$USE_CN_MIRROR" = "true" ]; then
+            # 使用 --cn 参数时，自动配置镜像加速器
+            log_info "使用中国镜像模式，自动配置镜像加速器..."
+            configure_docker_mirror
+        elif is_interactive; then
+            log_warn "  未配置 Docker 镜像加速器"
+            read -p "是否配置镜像加速器（国内服务器推荐）？[Y/n]: " config_mirror
+            if [[ ! "$config_mirror" =~ ^[Nn]$ ]]; then
+                configure_docker_mirror
+            fi
+        else
+            # 非交互模式，默认配置
+            log_info "非交互模式，自动配置镜像加速器..."
             configure_docker_mirror
         fi
     else
@@ -425,10 +470,14 @@ check_requirements() {
         echo "  查看占用进程: lsof -i :端口号"
         echo "  停止占用进程: kill -9 \$(lsof -t -i :端口号)"
         echo ""
-        read -p "是否继续部署？（可能会失败）[y/N]: " continue_deploy
-        if [[ ! "$continue_deploy" =~ ^[Yy]$ ]]; then
-            log_info "部署已取消"
-            exit 0
+        if is_interactive; then
+            read -p "是否继续部署？（可能会失败）[y/N]: " continue_deploy
+            if [[ ! "$continue_deploy" =~ ^[Yy]$ ]]; then
+                log_info "部署已取消"
+                exit 0
+            fi
+        else
+            log_warn "非交互模式，忽略端口冲突继续部署..."
         fi
     else
         log_success "  端口检查通过"
@@ -1067,10 +1116,22 @@ main() {
     echo -e "${GREEN}╚════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
     
+    # 进入部署目录
+    log_info "部署目录: $DEPLOY_DIR"
+    mkdir -p "$DEPLOY_DIR"
+    cd "$DEPLOY_DIR"
+    
     # 检查是否已有配置
     if [ -f "$DEPLOY_DIR/.env" ] && [ -f "$DEPLOY_DIR/docker-compose.yml" ]; then
         log_warn "检测到已有配置文件"
-        read -p "是否覆盖现有配置？[y/N]: " confirm
+        local confirm=""
+        if is_interactive; then
+            read -p "是否覆盖现有配置？[y/N]: " confirm
+        else
+            # 非交互模式，默认使用现有配置启动
+            log_info "非交互模式，使用现有配置启动服务..."
+            confirm="n"
+        fi
         if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
             log_info "使用现有配置启动服务..."
             cd "$DEPLOY_DIR"
