@@ -869,6 +869,19 @@ server {
 EOF
     log_success "  创建 nginx/nginx.conf"
     
+    # ========== 下载 deploy.sh 脚本 ==========
+    # 如果是通过管道执行的，下载脚本到本地以便后续使用
+    if [ ! -f "deploy.sh" ]; then
+        log_info "下载部署脚本..."
+        local script_url="https://gitee.com/No8blackball/tgo-rtcserver/raw/main/scripts/deploy.sh"
+        if curl -fsSL "$script_url" -o deploy.sh 2>/dev/null; then
+            chmod +x deploy.sh
+            log_success "  创建 deploy.sh"
+        else
+            log_warn "  无法下载 deploy.sh，后续运维命令可能不可用"
+        fi
+    fi
+    
     log_success "配置文件生成完成"
 }
 
