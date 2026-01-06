@@ -82,6 +82,9 @@ LIVEKIT_NODES="${LIVEKIT_NODES:-}"
 # 服务器地址（用于客户端连接）
 SERVER_HOST="${SERVER_HOST:-}"
 
+# 中国镜像模式（通过 --cn 参数启用）
+USE_CN_MIRROR="${USE_CN_MIRROR:-false}"
+
 # ============================================================================
 # 工具函数
 # ============================================================================
@@ -223,15 +226,24 @@ install_docker() {
             sudo apt-get update
             sudo apt-get install -y ca-certificates curl gnupg lsb-release
             
-            # 添加 Docker 官方 GPG key
             sudo mkdir -p /etc/apt/keyrings
-            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
             
-            # 设置仓库
-            echo \
-              "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-              $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-              sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+            if [ "$USE_CN_MIRROR" = "true" ]; then
+                # 使用阿里云镜像安装 Docker
+                log_info "使用阿里云镜像源..."
+                curl -fsSL https://mirrors.aliyun.com/docker-ce/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+                echo \
+                  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://mirrors.aliyun.com/docker-ce/linux/ubuntu \
+                  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+                  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+            else
+                # 使用 Docker 官方源
+                curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+                echo \
+                  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+                  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+                  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+            fi
             
             # 安装 Docker
             sudo apt-get update
@@ -242,8 +254,16 @@ install_docker() {
             # CentOS/RHEL/Fedora 系统
             log_info "使用 yum/dnf 安装 Docker..."
             sudo yum install -y yum-utils || sudo dnf install -y dnf-plugins-core
-            sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo || \
-            sudo dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+            
+            if [ "$USE_CN_MIRROR" = "true" ]; then
+                # 使用阿里云镜像源
+                log_info "使用阿里云镜像源..."
+                sudo yum-config-manager --add-repo https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo || \
+                sudo dnf config-manager --add-repo https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
+            else
+                sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo || \
+                sudo dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+            fi
             
             sudo yum install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin || \
             sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
@@ -998,6 +1018,9 @@ show_result() {
     echo "  必须开放: 80, 8080, 7880, 7881, 3478/UDP, 50000-50100/UDP"
     echo "  可选开放: 8081(数据库管理), 5349(TLS穿透)"
     echo ""
+    echo -e "  ${YELLOW}提示: 运行 './deploy.sh firewall' 可自动配置服务器防火墙${NC}"
+    echo -e "  ${YELLOW}      云安全组需要在云控制台手动配置${NC}"
+    echo ""
 }
 
 # ============================================================================
@@ -1050,7 +1073,10 @@ show_help() {
     echo ""
     echo "TgoRTC Server 一键部署脚本"
     echo ""
-    echo "用法: $0 [命令]"
+    echo "用法: $0 [--cn] [命令]"
+    echo ""
+    echo "通用参数:"
+    echo "  --cn       使用中国镜像加速（Docker 安装源、镜像加速器等）"
     echo ""
     echo "部署命令:"
     echo "  deploy     首次部署服务（默认）"
@@ -1064,6 +1090,7 @@ show_help() {
     echo "  logs       查看服务日志"
     echo "  restart    重启所有服务"
     echo "  reload     重载 Nginx 配置（更新集群节点后使用）"
+    echo "  firewall   配置服务器防火墙（自动开放端口）"
     echo "  stop       停止所有服务"
     echo "  clean      停止并清理所有数据（危险）"
     echo ""
@@ -1071,22 +1098,24 @@ show_help() {
     echo "  help       显示帮助信息"
     echo ""
     echo "示例:"
-    echo "  $0              # 首次部署"
-    echo "  $0 update       # 升级到最新版本"
-    echo "  $0 check        # 健康检查"
-    echo "  $0 logs         # 查看日志"
-    echo "  $0 rollback     # 回滚到上一版本"
+    echo "  $0                    # 首次部署（国际网络）"
+    echo "  $0 --cn               # 首次部署（中国镜像加速）"
+    echo "  $0 --cn update        # 升级更新（中国镜像加速）"
+    echo "  $0 check              # 健康检查"
+    echo "  $0 logs               # 查看日志"
+    echo "  $0 rollback           # 回滚到上一版本"
     echo ""
     echo "环境变量:"
     echo "  DOCKER_IMAGE    自定义镜像地址（可选，有默认值）"
     echo "  SERVER_HOST     服务器公网IP或域名（可选，自动检测）"
     echo "  LIVEKIT_NODES   LiveKit 集群节点，逗号分隔（可选）"
+    echo "  USE_CN_MIRROR   设为 true 启用中国镜像（等效于 --cn 参数）"
     echo ""
     echo "默认镜像: crpi-4ja8peh93d2yb8c8.cn-shanghai.personal.cr.aliyuncs.com/slun/tgortc:latest"
     echo ""
     echo "示例:"
-    echo "  # 快速部署（使用默认镜像）"
-    echo "  $0"
+    echo "  # 快速部署（使用默认镜像，中国服务器推荐使用 --cn）"
+    echo "  $0 --cn"
     echo ""
     echo "  # 使用自定义镜像"
     echo "  DOCKER_IMAGE=your-registry/image:tag $0"
@@ -1272,6 +1301,95 @@ cmd_clean() {
     else
         log_info "操作已取消"
     fi
+}
+
+# 配置服务器防火墙
+cmd_firewall() {
+    echo ""
+    echo -e "${GREEN}╔════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║              配置服务器防火墙                                  ║${NC}"
+    echo -e "${GREEN}╚════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    
+    # 检测防火墙类型
+    local firewall_type=""
+    if command -v ufw &> /dev/null; then
+        firewall_type="ufw"
+    elif command -v firewall-cmd &> /dev/null; then
+        firewall_type="firewalld"
+    else
+        log_warn "未检测到 ufw 或 firewalld，跳过防火墙配置"
+        echo ""
+        echo "请手动开放以下端口："
+        echo "  TCP: 80, 8080, 7880, 7881, 5349, 8081"
+        echo "  UDP: 3478, 50000-50100"
+        return 0
+    fi
+    
+    log_info "检测到防火墙: $firewall_type"
+    echo ""
+    echo "将开放以下端口："
+    echo "  TCP: 80, 8080, 7880, 7881, 5349, 8081"
+    echo "  UDP: 3478, 50000-50100"
+    echo ""
+    read -p "是否继续配置？[Y/n]: " confirm
+    if [[ "$confirm" =~ ^[Nn]$ ]]; then
+        log_info "配置已取消"
+        return 0
+    fi
+    
+    if [ "$firewall_type" = "ufw" ]; then
+        log_info "配置 UFW 防火墙..."
+        
+        # TCP 端口
+        sudo ufw allow 80/tcp comment 'TgoRTC Nginx'
+        sudo ufw allow 8080/tcp comment 'TgoRTC API'
+        sudo ufw allow 8081/tcp comment 'TgoRTC Adminer'
+        sudo ufw allow 7880/tcp comment 'LiveKit Signal'
+        sudo ufw allow 7881/tcp comment 'LiveKit WebRTC TCP'
+        sudo ufw allow 5349/tcp comment 'LiveKit TURN TLS'
+        
+        # UDP 端口
+        sudo ufw allow 3478/udp comment 'LiveKit TURN'
+        sudo ufw allow 50000:50100/udp comment 'LiveKit RTC Media'
+        
+        # 启用防火墙
+        sudo ufw --force enable
+        
+        log_success "UFW 防火墙配置完成"
+        echo ""
+        sudo ufw status numbered
+        
+    elif [ "$firewall_type" = "firewalld" ]; then
+        log_info "配置 Firewalld 防火墙..."
+        
+        # TCP 端口
+        sudo firewall-cmd --permanent --add-port=80/tcp
+        sudo firewall-cmd --permanent --add-port=8080/tcp
+        sudo firewall-cmd --permanent --add-port=8081/tcp
+        sudo firewall-cmd --permanent --add-port=7880/tcp
+        sudo firewall-cmd --permanent --add-port=7881/tcp
+        sudo firewall-cmd --permanent --add-port=5349/tcp
+        
+        # UDP 端口
+        sudo firewall-cmd --permanent --add-port=3478/udp
+        sudo firewall-cmd --permanent --add-port=50000-50100/udp
+        
+        # 重载配置
+        sudo firewall-cmd --reload
+        
+        log_success "Firewalld 防火墙配置完成"
+        echo ""
+        sudo firewall-cmd --list-ports
+    fi
+    
+    echo ""
+    echo -e "${YELLOW}⚠️  注意：云服务器安全组需要在云控制台单独配置！${NC}"
+    echo ""
+    echo "  腾讯云: https://console.cloud.tencent.com/cvm/securitygroup"
+    echo "  阿里云: https://ecs.console.aliyun.com/ → 安全组"
+    echo "  华为云: https://console.huaweicloud.com/ → 安全组"
+    echo ""
 }
 
 # ============================================================================
@@ -1519,6 +1637,35 @@ cmd_version() {
     echo ""
 }
 
+# ============================================================================
+# 参数解析
+# ============================================================================
+# 解析通用参数如 --cn
+parse_args() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --cn|--china)
+                USE_CN_MIRROR="true"
+                shift
+                ;;
+            *)
+                # 返回剩余参数
+                echo "$@"
+                return 0
+                ;;
+        esac
+    done
+}
+
+# 解析参数
+REMAINING_ARGS=$(parse_args "$@")
+set -- $REMAINING_ARGS
+
+# 如果使用中国镜像模式，显示提示
+if [ "$USE_CN_MIRROR" = "true" ]; then
+    echo -e "${GREEN}[CN] 使用中国镜像加速模式${NC}"
+fi
+
 # 根据参数执行不同命令
 case "${1:-deploy}" in
     deploy|"")
@@ -1550,6 +1697,9 @@ case "${1:-deploy}" in
         ;;
     reload|reload-nginx)
         cmd_reload_nginx
+        ;;
+    firewall|fw)
+        cmd_firewall
         ;;
     clean|purge)
         cmd_clean
