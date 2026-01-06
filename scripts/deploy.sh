@@ -91,8 +91,31 @@ LIVEKIT_NODES="${LIVEKIT_NODES:-}"
 # 服务器地址（用于客户端连接）
 SERVER_HOST="${SERVER_HOST:-}"
 
-# 中国镜像模式（通过 --cn 参数启用）
+# ============================================================================
+# 参数解析（必须在最开始处理，以便后续使用）
+# ============================================================================
+# 中国镜像模式（通过 --cn 参数或环境变量启用）
 USE_CN_MIRROR="${USE_CN_MIRROR:-false}"
+
+# 解析命令行参数
+SCRIPT_ARGS=("$@")
+REMAINING_ARGS=()
+for arg in "${SCRIPT_ARGS[@]}"; do
+    case "$arg" in
+        --cn|--china)
+            USE_CN_MIRROR="true"
+            ;;
+        *)
+            REMAINING_ARGS+=("$arg")
+            ;;
+    esac
+done
+set -- "${REMAINING_ARGS[@]}"
+
+# 如果使用中国镜像模式，立即显示提示
+if [ "$USE_CN_MIRROR" = "true" ]; then
+    echo -e "\033[0;32m[CN] 使用中国镜像加速模式\033[0m"
+fi
 
 # 检测是否为交互模式（管道执行时为非交互模式）
 is_interactive() {
@@ -1753,34 +1776,8 @@ cmd_version() {
 }
 
 # ============================================================================
-# 参数解析
+# 命令分发
 # ============================================================================
-# 解析通用参数如 --cn
-parse_args() {
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --cn|--china)
-                USE_CN_MIRROR="true"
-                shift
-                ;;
-            *)
-                # 返回剩余参数
-                echo "$@"
-                return 0
-                ;;
-        esac
-    done
-}
-
-# 解析参数
-REMAINING_ARGS=$(parse_args "$@")
-set -- $REMAINING_ARGS
-
-# 如果使用中国镜像模式，显示提示
-if [ "$USE_CN_MIRROR" = "true" ]; then
-    echo -e "${GREEN}[CN] 使用中国镜像加速模式${NC}"
-fi
-
 # 根据参数执行不同命令
 case "${1:-deploy}" in
     deploy|"")
