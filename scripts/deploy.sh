@@ -420,14 +420,33 @@ check_requirements() {
         log_success "  Docker 镜像加速器已配置"
     fi
     
-    # 检查 Docker Compose
-    if ! docker_compose_cmd version &> /dev/null; then
-        log_error "Docker Compose 未安装"
+    # 检查 Docker Compose（等待 Docker 完全启动）
+    log_info "检查 Docker Compose..."
+    local compose_retry=0
+    local compose_max_retry=3
+    while [ $compose_retry -lt $compose_max_retry ]; do
+        # 使用 timeout 防止命令挂起
+        if timeout 10 sudo docker compose version &> /dev/null 2>&1; then
+            break
+        fi
+        compose_retry=$((compose_retry + 1))
+        if [ $compose_retry -lt $compose_max_retry ]; then
+            log_warn "  Docker Compose 检测失败，等待重试 ($compose_retry/$compose_max_retry)..."
+            sleep 2
+        fi
+    done
+    
+    if [ $compose_retry -ge $compose_max_retry ]; then
+        log_error "Docker Compose 未安装或无法正常工作"
         echo "  Docker Compose 通常随 Docker 一起安装"
-        echo "  如果使用旧版本，请升级 Docker 或单独安装 docker-compose-plugin"
+        echo "  请尝试: sudo docker compose version"
+        echo "  如果失败，请重启服务器后重试"
         exit 1
     fi
-    log_success "  Docker Compose 已安装: $(docker_compose_cmd version --short)"
+    
+    local compose_version
+    compose_version=$(timeout 10 sudo docker compose version --short 2>/dev/null || echo "unknown")
+    log_success "  Docker Compose 已安装: $compose_version"
     
     # 检查 Docker 是否运行
     if ! docker info &> /dev/null; then
