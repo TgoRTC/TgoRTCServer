@@ -178,6 +178,37 @@ detect_os() {
     fi
 }
 
+# 配置 Docker 镜像加速器（国内服务器使用）
+configure_docker_mirror() {
+    log_info "配置 Docker 镜像加速器（国内加速）..."
+    
+    sudo mkdir -p /etc/docker
+    
+    # 检查是否已有配置
+    if [ -f /etc/docker/daemon.json ]; then
+        # 备份原配置
+        sudo cp /etc/docker/daemon.json /etc/docker/daemon.json.bak
+    fi
+    
+    # 写入镜像加速配置
+    sudo tee /etc/docker/daemon.json > /dev/null <<-'EOF'
+{
+  "registry-mirrors": [
+    "https://docker.m.daocloud.io",
+    "https://dockerhub.timeweb.cloud",
+    "https://docker.1ms.run",
+    "https://hub.rat.dev"
+  ]
+}
+EOF
+    
+    # 重启 Docker 使配置生效
+    sudo systemctl daemon-reload
+    sudo systemctl restart docker
+    
+    log_success "Docker 镜像加速器配置完成"
+}
+
 # 安装 Docker
 install_docker() {
     local os_type=$(detect_os)
@@ -241,6 +272,9 @@ install_docker() {
     sudo systemctl start docker
     sudo systemctl enable docker
     
+    # 配置镜像加速器（国内服务器必需）
+    configure_docker_mirror
+    
     # 将当前用户添加到 docker 组（避免每次使用 sudo）
     if [ -n "$SUDO_USER" ]; then
         sudo usermod -aG docker "$SUDO_USER"
@@ -275,6 +309,17 @@ check_requirements() {
         fi
     fi
     log_success "  Docker 已安装: $(docker --version | head -1)"
+    
+    # 检查是否配置了镜像加速器
+    if ! grep -q "registry-mirrors" /etc/docker/daemon.json 2>/dev/null; then
+        log_warn "  未配置 Docker 镜像加速器"
+        read -p "是否配置镜像加速器（国内服务器推荐）？[Y/n]: " config_mirror
+        if [[ ! "$config_mirror" =~ ^[Nn]$ ]]; then
+            configure_docker_mirror
+        fi
+    else
+        log_success "  Docker 镜像加速器已配置"
+    fi
     
     # 检查 Docker Compose
     if ! docker compose version &> /dev/null; then
