@@ -731,16 +731,30 @@ port: 7880
 rtc:
   port_range_start: 50000
   port_range_end: 50100
-  use_external_ip: true
+  # 使用固定的节点 IP（公网 IP）
+  node_ip: ${server_host}
   tcp_port: 7881
 
 turn:
   enabled: true
+  # TURN 域名设置为服务器 IP（如有域名可替换）
+  domain: ${server_host}
   udp_port: 3478
-  tls_port: 5349
 
 keys:
   ${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}
+
+# Redis 配置（集群模式必需，用于房间分配）
+redis:
+  address: redis:6379
+  password: ${REDIS_PASSWORD}
+  db: 0
+
+# Webhook 回调配置（通知 TgoRTC 服务）
+webhook:
+  api_key: ${LIVEKIT_API_KEY}
+  urls:
+    - http://tgo-rtc-server:8080/api/v1/webhooks/livekit
 
 logging:
   level: info
