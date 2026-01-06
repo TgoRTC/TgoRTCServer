@@ -44,14 +44,14 @@ handle_error() {
     echo "  4. 权限不足:           sudo ./deploy.sh"
     echo ""
     echo -e "\033[1;33m[调试] 查看详细日志：\033[0m"
-    echo "  • docker_compose_cmd logs -f"
-    echo "  • docker_compose_cmd ps"
+    echo "  • sudo docker compose logs -f"
+    echo "  • sudo docker compose ps"
     echo ""
     
     # 如果有部分启动的容器，提示清理
-    if docker_compose_cmd ps -q 2>/dev/null | grep -q .; then
+    if sudo docker compose ps -q 2>/dev/null | grep -q .; then
         echo -e "\033[1;33m[清理] 停止已启动的服务：\033[0m"
-        echo "  docker_compose_cmd down"
+        echo "  sudo docker compose down"
     fi
     
     exit $exit_code
@@ -96,22 +96,7 @@ USE_CN_MIRROR="${USE_CN_MIRROR:-false}"
 
 # 检测是否为交互模式（管道执行时为非交互模式）
 is_interactive() {
-    # 如果 stdin 是终端，则为交互模式
     [ -t 0 ]
-}
-
-# 非交互模式下的默认确认（自动选择 Y）
-auto_confirm() {
-    local prompt="$1"
-    local default="${2:-Y}"
-    
-    if is_interactive; then
-        read -p "$prompt" response
-        echo "$response"
-    else
-        # 非交互模式，返回默认值
-        echo "$default"
-    fi
 }
 
 # ============================================================================
@@ -142,9 +127,9 @@ docker_cmd() {
 # Docker Compose 命令包装器
 docker_compose_cmd() {
     if need_docker_sudo; then
-        sudo docker_compose_cmd "$@"
+        sudo docker compose "$@"
     else
-        docker_compose_cmd "$@"
+        docker compose "$@"
     fi
 }
 
@@ -854,19 +839,21 @@ EOF
 # 启动服务
 # ============================================================================
 start_services() {
-    log_info "拉取 Docker 镜像..."
-    if ! docker_compose_cmd pull 2>&1 | tee /tmp/tgo-deploy-pull.log; then
+    log_info "拉取 Docker 镜像（可能需要几分钟）..."
+    echo "  提示: 如果长时间无响应，可以 Ctrl+C 中断后手动执行: sudo docker compose pull"
+    echo ""
+    # 直接输出到终端，不重定向，这样可以看到实时进度
+    if ! docker_compose_cmd pull; then
         log_error "镜像拉取失败，请检查网络连接"
-        echo "  详细日志: cat /tmp/tgo-deploy-pull.log"
+        echo "  尝试手动拉取: sudo docker compose pull"
         return 1
     fi
+    echo ""
     
     log_info "启动服务..."
-    if ! docker_compose_cmd up -d 2>&1 | tee /tmp/tgo-deploy-up.log; then
+    if ! docker_compose_cmd up -d; then
         log_error "服务启动失败"
-        echo "  详细日志: cat /tmp/tgo-deploy-up.log"
-        echo ""
-        echo "  查看容器日志: docker_compose_cmd logs"
+        echo "  查看容器日志: sudo docker compose logs"
         return 1
     fi
     
@@ -897,7 +884,7 @@ wait_for_services() {
     
     if [ $attempt -ge $max_attempts ]; then
         echo " ✗"
-        log_warn "TgoRTC API 启动超时，请检查日志: docker_compose_cmd logs tgo-rtc-server"
+        log_warn "TgoRTC API 启动超时，请检查日志: sudo docker compose logs tgo-rtc-server"
     fi
 }
 
@@ -1015,19 +1002,19 @@ health_check() {
                 service_name="${result%%:*}"
                 case "$service_name" in
                     API)
-                        echo "  • TgoRTC API: docker_compose_cmd logs tgo-rtc-server"
+                        echo "  • TgoRTC API: sudo docker compose logs tgo-rtc-server"
                         ;;
                     Nginx)
-                        echo "  • Nginx: docker_compose_cmd logs nginx"
+                        echo "  • Nginx: sudo docker compose logs nginx"
                         ;;
                     LiveKit)
-                        echo "  • LiveKit: docker_compose_cmd logs livekit"
+                        echo "  • LiveKit: sudo docker compose logs livekit"
                         ;;
                     MySQL)
-                        echo "  • MySQL: docker_compose_cmd logs mysql"
+                        echo "  • MySQL: sudo docker compose logs mysql"
                         ;;
                     Redis)
-                        echo "  • Redis: docker_compose_cmd logs redis"
+                        echo "  • Redis: sudo docker compose logs redis"
                         ;;
                 esac
             fi
@@ -1073,10 +1060,10 @@ show_result() {
     echo "  • nginx/nginx.conf   - Nginx 负载均衡配置"
     echo ""
     echo -e "${BLUE}常用命令：${NC}"
-    echo "  查看日志:   docker_compose_cmd logs -f"
-    echo "  停止服务:   docker_compose_cmd down"
-    echo "  重启服务:   docker_compose_cmd restart"
-    echo "  查看状态:   docker_compose_cmd ps"
+    echo "  查看日志:   sudo docker compose logs -f"
+    echo "  停止服务:   sudo docker compose down"
+    echo "  重启服务:   sudo docker compose restart"
+    echo "  查看状态:   sudo docker compose ps"
     echo "  健康检查:   ./deploy.sh check"
     echo ""
     echo -e "${YELLOW}⚠️  重要提示：${NC}"
@@ -1399,7 +1386,7 @@ EOF
     if curl -sf http://localhost:80/health > /dev/null 2>&1; then
         log_success "Nginx 重启成功"
     else
-        log_warn "Nginx 可能未完全启动，请检查: docker_compose_cmd logs nginx"
+        log_warn "Nginx 可能未完全启动，请检查: sudo docker compose logs nginx"
     fi
     
     echo ""
@@ -1711,7 +1698,7 @@ cmd_rollback() {
         echo ""
         echo "手动回滚方法："
         echo "  1. 编辑 .env 文件，修改 DOCKER_IMAGE 为旧版本"
-        echo "  2. 执行: docker_compose_cmd up -d tgo-rtc-server"
+        echo "  2. 执行: sudo docker compose up -d tgo-rtc-server"
         echo ""
         echo "查看可用镜像版本："
         echo "  docker images | grep tgortc"
