@@ -44,14 +44,14 @@ handle_error() {
     echo "  4. 权限不足:           sudo ./deploy.sh"
     echo ""
     echo -e "\033[1;33m[调试] 查看详细日志：\033[0m"
-    echo "  • docker compose logs -f"
-    echo "  • docker compose ps"
+    echo "  • docker_compose_cmd logs -f"
+    echo "  • docker_compose_cmd ps"
     echo ""
     
     # 如果有部分启动的容器，提示清理
-    if docker compose ps -q 2>/dev/null | grep -q .; then
+    if docker_compose_cmd ps -q 2>/dev/null | grep -q .; then
         echo -e "\033[1;33m[清理] 停止已启动的服务：\033[0m"
-        echo "  docker compose down"
+        echo "  docker_compose_cmd down"
     fi
     
     exit $exit_code
@@ -84,6 +84,40 @@ SERVER_HOST="${SERVER_HOST:-}"
 
 # 中国镜像模式（通过 --cn 参数启用）
 USE_CN_MIRROR="${USE_CN_MIRROR:-false}"
+
+# ============================================================================
+# Docker 命令包装器（自动处理 sudo 权限）
+# ============================================================================
+# 检测是否需要 sudo 运行 docker
+need_docker_sudo() {
+    # 如果已经是 root 用户，不需要 sudo
+    if [ "$(id -u)" = "0" ]; then
+        return 1
+    fi
+    # 检查当前用户是否在 docker 组中且可以访问 docker socket
+    if docker info &>/dev/null; then
+        return 1
+    fi
+    return 0
+}
+
+# Docker 命令包装器
+docker_cmd() {
+    if need_docker_sudo; then
+        sudo docker "$@"
+    else
+        docker "$@"
+    fi
+}
+
+# Docker Compose 命令包装器
+docker_compose_cmd() {
+    if need_docker_sudo; then
+        sudo docker_compose_cmd "$@"
+    else
+        docker_compose_cmd "$@"
+    fi
+}
 
 # ============================================================================
 # 工具函数
@@ -342,13 +376,13 @@ check_requirements() {
     fi
     
     # 检查 Docker Compose
-    if ! docker compose version &> /dev/null; then
+    if ! docker_compose_cmd version &> /dev/null; then
         log_error "Docker Compose 未安装"
         echo "  Docker Compose 通常随 Docker 一起安装"
         echo "  如果使用旧版本，请升级 Docker 或单独安装 docker-compose-plugin"
         exit 1
     fi
-    log_success "  Docker Compose 已安装: $(docker compose version --short)"
+    log_success "  Docker Compose 已安装: $(docker_compose_cmd version --short)"
     
     # 检查 Docker 是否运行
     if ! docker info &> /dev/null; then
@@ -753,18 +787,18 @@ EOF
 # ============================================================================
 start_services() {
     log_info "拉取 Docker 镜像..."
-    if ! docker compose pull 2>&1 | tee /tmp/tgo-deploy-pull.log; then
+    if ! docker_compose_cmd pull 2>&1 | tee /tmp/tgo-deploy-pull.log; then
         log_error "镜像拉取失败，请检查网络连接"
         echo "  详细日志: cat /tmp/tgo-deploy-pull.log"
         return 1
     fi
     
     log_info "启动服务..."
-    if ! docker compose up -d 2>&1 | tee /tmp/tgo-deploy-up.log; then
+    if ! docker_compose_cmd up -d 2>&1 | tee /tmp/tgo-deploy-up.log; then
         log_error "服务启动失败"
         echo "  详细日志: cat /tmp/tgo-deploy-up.log"
         echo ""
-        echo "  查看容器日志: docker compose logs"
+        echo "  查看容器日志: docker_compose_cmd logs"
         return 1
     fi
     
@@ -795,7 +829,7 @@ wait_for_services() {
     
     if [ $attempt -ge $max_attempts ]; then
         echo " ✗"
-        log_warn "TgoRTC API 启动超时，请检查日志: docker compose logs tgo-rtc-server"
+        log_warn "TgoRTC API 启动超时，请检查日志: docker_compose_cmd logs tgo-rtc-server"
     fi
 }
 
@@ -846,12 +880,12 @@ health_check() {
     
     # 4. 检查 MySQL
     echo -n "  [4/6] MySQL (localhost:3307) ... "
-    if docker exec tgo-rtc-mysql mysqladmin ping -h localhost -u root -p"$DB_PASSWORD" --silent 2>/dev/null; then
+    if docker_cmd exec tgo-rtc-mysql mysqladmin ping -h localhost -u root -p"$DB_PASSWORD" --silent 2>/dev/null; then
         echo -e "${GREEN}✓ 正常${NC}"
         check_results+=("MySQL:OK")
     else
         # 备用检查方式
-        if docker compose ps mysql 2>/dev/null | grep -q "healthy\|running"; then
+        if docker_compose_cmd ps mysql 2>/dev/null | grep -q "healthy\|running"; then
             echo -e "${GREEN}✓ 正常${NC}"
             check_results+=("MySQL:OK")
         else
@@ -863,12 +897,12 @@ health_check() {
     
     # 5. 检查 Redis
     echo -n "  [5/6] Redis (localhost:6380) ... "
-    if docker exec tgo-rtc-redis redis-cli -a "$REDIS_PASSWORD" ping 2>/dev/null | grep -q "PONG"; then
+    if docker_cmd exec tgo-rtc-redis redis-cli -a "$REDIS_PASSWORD" ping 2>/dev/null | grep -q "PONG"; then
         echo -e "${GREEN}✓ 正常${NC}"
         check_results+=("Redis:OK")
     else
         # 备用检查方式
-        if docker compose ps redis 2>/dev/null | grep -q "healthy\|running"; then
+        if docker_compose_cmd ps redis 2>/dev/null | grep -q "healthy\|running"; then
             echo -e "${GREEN}✓ 正常${NC}"
             check_results+=("Redis:OK")
         else
@@ -892,7 +926,7 @@ health_check() {
     
     # 显示容器状态
     log_info "容器状态:"
-    docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || docker compose ps
+    docker_compose_cmd ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || docker_compose_cmd ps
     
     echo ""
     
@@ -913,19 +947,19 @@ health_check() {
                 service_name="${result%%:*}"
                 case "$service_name" in
                     API)
-                        echo "  • TgoRTC API: docker compose logs tgo-rtc-server"
+                        echo "  • TgoRTC API: docker_compose_cmd logs tgo-rtc-server"
                         ;;
                     Nginx)
-                        echo "  • Nginx: docker compose logs nginx"
+                        echo "  • Nginx: docker_compose_cmd logs nginx"
                         ;;
                     LiveKit)
-                        echo "  • LiveKit: docker compose logs livekit"
+                        echo "  • LiveKit: docker_compose_cmd logs livekit"
                         ;;
                     MySQL)
-                        echo "  • MySQL: docker compose logs mysql"
+                        echo "  • MySQL: docker_compose_cmd logs mysql"
                         ;;
                     Redis)
-                        echo "  • Redis: docker compose logs redis"
+                        echo "  • Redis: docker_compose_cmd logs redis"
                         ;;
                 esac
             fi
@@ -971,10 +1005,10 @@ show_result() {
     echo "  • nginx/nginx.conf   - Nginx 负载均衡配置"
     echo ""
     echo -e "${BLUE}常用命令：${NC}"
-    echo "  查看日志:   docker compose logs -f"
-    echo "  停止服务:   docker compose down"
-    echo "  重启服务:   docker compose restart"
-    echo "  查看状态:   docker compose ps"
+    echo "  查看日志:   docker_compose_cmd logs -f"
+    echo "  停止服务:   docker_compose_cmd down"
+    echo "  重启服务:   docker_compose_cmd restart"
+    echo "  查看状态:   docker_compose_cmd ps"
     echo "  健康检查:   ./deploy.sh check"
     echo ""
     echo -e "${YELLOW}⚠️  重要提示：${NC}"
@@ -1040,7 +1074,7 @@ main() {
         if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
             log_info "使用现有配置启动服务..."
             cd "$DEPLOY_DIR"
-            docker compose up -d
+            docker_compose_cmd up -d
             wait_for_services
             show_result
             exit 0
@@ -1147,22 +1181,22 @@ cmd_status() {
     echo ""
     log_info "服务状态:"
     echo ""
-    docker compose ps
+    docker_compose_cmd ps
 }
 
 cmd_logs() {
-    docker compose logs -f
+    docker_compose_cmd logs -f
 }
 
 cmd_stop() {
     log_info "停止服务..."
-    docker compose down
+    docker_compose_cmd down
     log_success "服务已停止"
 }
 
 cmd_restart() {
     log_info "重启服务..."
-    docker compose restart
+    docker_compose_cmd restart
     log_success "服务已重启"
     
     sleep 5
@@ -1277,7 +1311,7 @@ EOF
     # 重启 Nginx
     echo ""
     log_info "重启 Nginx 服务..."
-    docker compose restart nginx
+    docker_compose_cmd restart nginx
     
     sleep 3
     
@@ -1285,7 +1319,7 @@ EOF
     if curl -sf http://localhost:80/health > /dev/null 2>&1; then
         log_success "Nginx 重启成功"
     else
-        log_warn "Nginx 可能未完全启动，请检查: docker compose logs nginx"
+        log_warn "Nginx 可能未完全启动，请检查: docker_compose_cmd logs nginx"
     fi
     
     echo ""
@@ -1296,7 +1330,7 @@ cmd_clean() {
     read -p "确定要继续吗？[y/N]: " confirm
     if [[ "$confirm" =~ ^[Yy]$ ]]; then
         log_info "停止并清理服务..."
-        docker compose down -v
+        docker_compose_cmd down -v
         log_success "服务已停止，数据已清理"
     else
         log_info "操作已取消"
@@ -1448,12 +1482,12 @@ update_tgortc_only() {
     echo ""
     
     # 记录当前版本
-    local current_image=$(docker inspect tgo-rtc-server --format='{{.Config.Image}}' 2>/dev/null || echo "unknown")
+    local current_image=$(docker_cmd inspect tgo-rtc-server --format='{{.Config.Image}}' 2>/dev/null || echo "unknown")
     log_info "当前版本: $current_image"
     
     # 拉取最新镜像
     log_info "拉取最新镜像..."
-    if ! docker compose pull tgo-rtc-server 2>&1 | tee /tmp/tgo-update.log; then
+    if ! docker_compose_cmd pull tgo-rtc-server 2>&1 | tee /tmp/tgo-update.log; then
         log_error "镜像拉取失败"
         echo "  查看日志: cat /tmp/tgo-update.log"
         return 1
@@ -1461,11 +1495,11 @@ update_tgortc_only() {
     
     # 备份当前容器日志
     log_info "备份当前日志..."
-    docker compose logs tgo-rtc-server > "/tmp/tgo-rtc-server-$(date +%Y%m%d_%H%M%S).log" 2>/dev/null || true
+    docker_compose_cmd logs tgo-rtc-server > "/tmp/tgo-rtc-server-$(date +%Y%m%d_%H%M%S).log" 2>/dev/null || true
     
     # 重启服务（使用新镜像）
     log_info "重启服务..."
-    docker compose up -d tgo-rtc-server
+    docker_compose_cmd up -d tgo-rtc-server
     
     # 等待服务就绪
     log_info "等待服务就绪..."
@@ -1475,7 +1509,7 @@ update_tgortc_only() {
     health_check
     
     # 显示更新结果
-    local new_image=$(docker inspect tgo-rtc-server --format='{{.Config.Image}}' 2>/dev/null || echo "unknown")
+    local new_image=$(docker_cmd inspect tgo-rtc-server --format='{{.Config.Image}}' 2>/dev/null || echo "unknown")
     echo ""
     log_success "更新完成！"
     echo "  • 更新前: $current_image"
@@ -1497,15 +1531,15 @@ update_all_services() {
     
     # 拉取所有镜像
     log_info "拉取所有镜像..."
-    docker compose pull
+    docker_compose_cmd pull
     
     # 备份日志
     log_info "备份当前日志..."
-    docker compose logs > "/tmp/tgo-all-services-$(date +%Y%m%d_%H%M%S).log" 2>/dev/null || true
+    docker_compose_cmd logs > "/tmp/tgo-all-services-$(date +%Y%m%d_%H%M%S).log" 2>/dev/null || true
     
     # 重启所有服务
     log_info "重启所有服务..."
-    docker compose up -d
+    docker_compose_cmd up -d
     
     # 等待服务就绪
     log_info "等待服务就绪..."
@@ -1545,7 +1579,7 @@ update_specific_version() {
     
     # 拉取指定版本
     log_info "拉取镜像: $new_image"
-    if ! docker pull "$new_image"; then
+    if ! docker_cmd pull "$new_image"; then
         log_error "镜像拉取失败: $new_image"
         # 回滚配置
         mv .env.bak .env
@@ -1555,7 +1589,7 @@ update_specific_version() {
     
     # 重启服务
     log_info "重启服务..."
-    docker compose up -d tgo-rtc-server
+    docker_compose_cmd up -d tgo-rtc-server
     
     # 等待服务就绪
     log_info "等待服务就绪..."
@@ -1587,7 +1621,7 @@ cmd_rollback() {
         if [[ "$confirm" =~ ^[Yy]$ ]]; then
             mv .env.bak .env
             source .env
-            docker compose up -d tgo-rtc-server
+            docker_compose_cmd up -d tgo-rtc-server
             log_success "已回滚到: $old_image"
             sleep 10
             health_check
@@ -1597,7 +1631,7 @@ cmd_rollback() {
         echo ""
         echo "手动回滚方法："
         echo "  1. 编辑 .env 文件，修改 DOCKER_IMAGE 为旧版本"
-        echo "  2. 执行: docker compose up -d tgo-rtc-server"
+        echo "  2. 执行: docker_compose_cmd up -d tgo-rtc-server"
         echo ""
         echo "查看可用镜像版本："
         echo "  docker images | grep tgortc"
@@ -1619,12 +1653,12 @@ cmd_version() {
     fi
     
     # 运行中的镜像版本
-    local running_image=$(docker inspect tgo-rtc-server --format='{{.Config.Image}}' 2>/dev/null)
+    local running_image=$(docker_cmd inspect tgo-rtc-server --format='{{.Config.Image}}' 2>/dev/null)
     if [ -n "$running_image" ]; then
         echo "  运行镜像:  $running_image"
         
         # 容器创建时间
-        local created=$(docker inspect tgo-rtc-server --format='{{.Created}}' 2>/dev/null)
+        local created=$(docker_cmd inspect tgo-rtc-server --format='{{.Created}}' 2>/dev/null)
         echo "  创建时间:  $created"
     else
         echo "  运行镜像:  未运行"
@@ -1633,7 +1667,7 @@ cmd_version() {
     # 本地可用镜像
     echo ""
     echo "  本地可用镜像："
-    docker images --format "    {{.Repository}}:{{.Tag}} ({{.Size}}, {{.CreatedSince}})" | grep -i tgortc || echo "    无"
+    docker_cmd images --format "    {{.Repository}}:{{.Tag}} ({{.Size}}, {{.CreatedSince}})" | grep -i tgortc || echo "    无"
     echo ""
 }
 
