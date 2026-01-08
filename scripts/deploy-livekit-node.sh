@@ -770,7 +770,7 @@ health_check() {
     done
     
     echo ""
-    log_warn "LiveKit 启动超时，请检查日志: docker compose logs"
+    log_warn "LiveKit 启动超时，请检查日志: sudo docker compose logs"
     return 1
 }
 
@@ -830,10 +830,10 @@ show_result() {
     echo ""
     
     echo -e "${CYAN}═══════════════════ 常用命令 ═══════════════════${NC}"
-    echo -e "  查看状态:             ${YELLOW}docker compose ps${NC}"
-    echo -e "  查看日志:             ${YELLOW}docker compose logs -f${NC}"
-    echo -e "  重启服务:             ${YELLOW}docker compose restart${NC}"
-    echo -e "  停止服务:             ${YELLOW}docker compose down${NC}"
+    echo -e "  查看状态:             ${YELLOW}sudo docker compose ps${NC}"
+    echo -e "  查看日志:             ${YELLOW}sudo docker compose logs -f${NC}"
+    echo -e "  重启服务:             ${YELLOW}sudo docker compose restart${NC}"
+    echo -e "  停止服务:             ${YELLOW}sudo docker compose down${NC}"
     echo ""
     
     echo -e "${CYAN}═══════════════ 需要开放的端口 ═══════════════${NC}"
@@ -1113,50 +1113,78 @@ cmd_info() {
 }
 
 # ============================================================================
+# 查找部署目录
+# ============================================================================
+find_deploy_dir() {
+    # 优先使用环境变量
+    if [ -n "$DEPLOY_DIR" ] && [ -f "$DEPLOY_DIR/docker-compose.yml" ]; then
+        echo "$DEPLOY_DIR"
+        return 0
+    fi
+    
+    # 检查当前目录
+    if [ -f "./docker-compose.yml" ] && [ -f "./livekit.yaml" ]; then
+        pwd
+        return 0
+    fi
+    
+    # 检查常见目录
+    for dir in "$HOME/livekit-node" "$HOME/livekit" "/opt/livekit-node" "/opt/livekit"; do
+        if [ -f "$dir/docker-compose.yml" ]; then
+            echo "$dir"
+            return 0
+        fi
+    done
+    
+    # 默认返回当前目录
+    pwd
+}
+
+# ============================================================================
 # 入口
 # ============================================================================
 
-# 首先解析参数
-parse_args "$@"
-
-# 检查是否有子命令
+# 首先检查是否有子命令（在 parse_args 之前处理，避免被当作未知参数）
 case "${1:-}" in
     firewall)
-        cd "${DEPLOY_DIR:-$HOME/livekit-node}" 2>/dev/null || true
+        cd "$(find_deploy_dir)" 2>/dev/null || true
         cmd_firewall
         exit 0
         ;;
     status)
-        cd "${DEPLOY_DIR:-$HOME/livekit-node}" 2>/dev/null || true
+        cd "$(find_deploy_dir)" 2>/dev/null || true
         cmd_status
         exit 0
         ;;
     logs)
-        cd "${DEPLOY_DIR:-$HOME/livekit-node}" 2>/dev/null || true
+        cd "$(find_deploy_dir)" 2>/dev/null || true
         cmd_logs
         exit 0
         ;;
     restart)
-        cd "${DEPLOY_DIR:-$HOME/livekit-node}" 2>/dev/null || true
+        cd "$(find_deploy_dir)" 2>/dev/null || true
         cmd_restart
         exit 0
         ;;
     stop)
-        cd "${DEPLOY_DIR:-$HOME/livekit-node}" 2>/dev/null || true
+        cd "$(find_deploy_dir)" 2>/dev/null || true
         cmd_stop
         exit 0
         ;;
     update)
-        cd "${DEPLOY_DIR:-$HOME/livekit-node}" 2>/dev/null || true
+        cd "$(find_deploy_dir)" 2>/dev/null || true
         cmd_update
         exit 0
         ;;
     info)
-        cd "${DEPLOY_DIR:-$HOME/livekit-node}" 2>/dev/null || true
+        cd "$(find_deploy_dir)" 2>/dev/null || true
         cmd_info
         exit 0
         ;;
 esac
+
+# 解析参数（首次部署时使用）
+parse_args "$@"
 
 # 运行主函数（首次部署）
 main
