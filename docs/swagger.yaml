@@ -321,6 +321,7 @@ paths:
         - `participant.rejected` - 参与者已拒绝（参与者拒绝加入房间）
         - `participant.missed` - 参与者已超时（参与者未在规定时间内加入）
         - `participant.cancelled` - 参与者已取消（发起者取消了对参与者的邀请）
+        - `participant.invited` - 参与者已邀请（房间中有新用户被邀请加入）
       parameters:
         - name: event_type
           in: query
@@ -336,6 +337,7 @@ paths:
               - participant.rejected
               - participant.missed
               - participant.cancelled
+              - participant.invited
           example: "participant.joined"
         - name: event_id
           in: query
@@ -421,6 +423,24 @@ paths:
                   created_at: 1704096500
                   updated_at: 1704096800
                   uid: "user_002"
+              participant.invited:
+                summary: 参与者已邀请事件
+                description: "请求 URL: /tgortc/webhook?event_type=participant.invited&event_id=1704096850-jkl012"
+                value:
+                  source_channel_id: "channel_001"
+                  source_channel_type: 0
+                  room_id: "room_abc123"
+                  creator: "user_001"
+                  rtc_type: 1
+                  invite_on: 1
+                  status: 1
+                  max_participants: 5
+                  duration: 0
+                  uids: ["user_001", "user_002", "user_003", "user_004"]
+                  created_at: 1704096500
+                  updated_at: 1704096850
+                  uid: "user_001"
+                  invited_uids: ["user_003", "user_004"]
       responses:
         '200':
           description: 事件接收成功
@@ -763,7 +783,7 @@ components:
 
     ParticipantEventData:
       type: object
-      description: 参与者事件数据（用于 participant.joined、participant.left、participant.rejected、participant.missed、participant.cancelled 事件）
+      description: 参与者事件数据（用于 participant.joined、participant.left、participant.rejected、participant.missed、participant.cancelled、participant.invited 事件）
       allOf:
         - $ref: '#/components/schemas/RoomEventData'
         - type: object
@@ -772,7 +792,7 @@ components:
           properties:
             uid:
               type: string
-              description: 操作者 UID（加入者/离开者/拒绝者等）
+              description: 操作者 UID（加入者/离开者/拒绝者/邀请发起者等）
               example: "user_002"
             device_type:
               type: string
@@ -784,4 +804,10 @@ components:
                 type: string
               description: 超时的参与者 UID 列表（仅在 participant.missed 事件中有值）
               example: ["user_002", "user_003"]
+            invited_uids:
+              type: array
+              items:
+                type: string
+              description: 被邀请的参与者 UID 列表（仅在 participant.invited 事件中有值）
+              example: ["user_003", "user_004"]
 

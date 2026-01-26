@@ -113,18 +113,16 @@ func (ps *ParticipantService) JoinRoom(req *models.JoinRoomRequest) (*models.Joi
 	}
 
 	return &models.JoinRoomResponse{
-		SourceChannelID:   room.SourceChannelID,
-		SourceChannelType: room.SourceChannelType,
-		RoomID:            req.RoomID,
-		Creator:           room.Creator,
-		Token:             tokenResult.Token,
-		URL:               tokenResult.URL,
-		RTCType:           room.RTCType,
-		Status:            room.Status,
-		CreatedAt:         ps.timeFormatter.FormatDateTime(room.CreatedAt),
-		MaxParticipants:   room.MaxParticipants,
-		Timeout:           tokenResult.Timeout,
-		UIDs:              uids,
+		RoomID:          req.RoomID,
+		Creator:         room.Creator,
+		Token:           tokenResult.Token,
+		URL:             tokenResult.URL,
+		RTCType:         room.RTCType,
+		Status:          room.Status,
+		CreatedAt:       ps.timeFormatter.FormatDateTime(room.CreatedAt),
+		MaxParticipants: room.MaxParticipants,
+		Timeout:         tokenResult.Timeout,
+		UIDs:            uids,
 	}, nil
 }
 
@@ -418,44 +416,50 @@ func (ps *ParticipantService) InviteParticipants(req *models.InviteParticipantRe
 		return errors.NewBusinessErrorWithKey(i18n.RoomQueryFailed, err.Error())
 	}
 
-	// 检查当前房间参与者人数（包括邀请中和已加入的）
-	var currentParticipantCount int64
-	if err := ps.db.Model(&models.Participant{}).
-		Where("room_id = ? AND status IN ?", req.RoomID, []int{models.ParticipantStatusInviting, models.ParticipantStatusJoined}).
-		Count(&currentParticipantCount).Error; err != nil {
+	// 查询当前房间所有参与者
+	var allParticipants []models.Participant
+	if err := ps.db.Where("room_id = ?", req.RoomID).Find(&allParticipants).Error; err != nil {
 		return errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
+	}
+
+	// 构建已存在参与者的 UID 映射，并统计活跃参与者数量
+	existingParticipantMap := make(map[string]*models.Participant)
+	activeParticipantCount := 0
+	for i := range allParticipants {
+		p := &allParticipants[i]
+		existingParticipantMap[p.UID] = p
+		if p.Status == models.ParticipantStatusInviting || p.Status == models.ParticipantStatusJoined {
+			activeParticipantCount++
+		}
+	}
+
+	// 计算新邀请的用户数量（不在当前房间中或状态不是邀请中/已加入的用户）
+	newInviteCount := 0
+	for _, uid := range req.UIDs {
+		if p, exists := existingParticipantMap[uid]; !exists {
+			newInviteCount++
+		} else if p.Status != models.ParticipantStatusInviting && p.Status != models.ParticipantStatusJoined {
+			newInviteCount++
+		}
 	}
 
 	// 检查邀请后是否会超过最大人数
-	if int(currentParticipantCount)+len(req.UIDs) > room.MaxParticipants {
+	if activeParticipantCount+newInviteCount > room.MaxParticipants {
 		return errors.NewBusinessErrorWithKey(i18n.RoomFull)
 	}
 
-	// 批量查询该房间中已存在的参与者（限定在 req.UIDs 范围内）
-	var existingParticipants []models.Participant
-	if err := ps.db.Where("room_id = ? AND uid IN ?", req.RoomID, req.UIDs).
-		Find(&existingParticipants).Error; err != nil {
-		return errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
-	}
-
-	// 构建已存在 uid 的 map，便于快速查找
-	existingUIDMap := make(map[string]models.Participant)
-	for _, p := range existingParticipants {
-		existingUIDMap[p.UID] = p
-	}
-
-	// 在事务中处理：已存在的更新状态，不存在的创建新记录
+	// 在事务中为每个 UID 创建或更新参与者记录
+	// 确保要么所有用户都被邀请成功，要么都失败
+	// 如果任何操作失败，事务会自动回滚
 	err := ps.db.Transaction(func(tx *gorm.DB) error {
 		for _, uid := range req.UIDs {
-			if existingParticipant, exists := existingUIDMap[uid]; exists {
+			if existingP, exists := existingParticipantMap[uid]; exists {
 				// 参与者已存在，更新状态为邀请中
-				if err := tx.Model(&models.Participant{}).
-					Where("id = ?", existingParticipant.ID).
-					Update("status", models.ParticipantStatusInviting).Error; err != nil {
-					return errors.NewBusinessErrorWithKey(i18n.ParticipantStatusUpdateFailed, err.Error())
+				if err := tx.Model(existingP).Update("status", models.ParticipantStatusInviting).Error; err != nil {
+					return errors.NewBusinessErrorWithKey(i18n.InvitedParticipantAddFailed, err.Error())
 				}
 			} else {
-				// 参与者不存在，创建新记录
+				// 创建新的参与者记录
 				participant := models.Participant{
 					RoomID: req.RoomID,
 					UID:    uid,
@@ -469,7 +473,28 @@ func (ps *ParticipantService) InviteParticipants(req *models.InviteParticipantRe
 		return nil
 	})
 
-	return err
+	if err != nil {
+		return err
+	}
+
+	// 发送事件
+	if ps.businessWebhookService != nil {
+		// 构建所有成员的 UIDs（已存在的 + 新邀请的）
+		uidSet := make(map[string]bool)
+		for _, p := range allParticipants {
+			uidSet[p.UID] = true
+		}
+		for _, uid := range req.UIDs {
+			uidSet[uid] = true
+		}
+		allUIDs := make([]string, 0, len(uidSet))
+		for uid := range uidSet {
+			allUIDs = append(allUIDs, uid)
+		}
+		// allUIDs 是房间所有成员，req.UIDs 是本次邀请的成员
+		ps.businessWebhookService.sendParticipantInvited(&room, allUIDs, req.UIDs)
+	}
+	return nil
 }
 
 // GetUserAvailableRooms 获取用户可加入的房间列表
@@ -538,18 +563,16 @@ func (ps *ParticipantService) GetUserAvailableRooms(uid string, deviceType strin
 		}
 
 		result = append(result, models.RoomResp{
-			SourceChannelID:   room.SourceChannelID,
-			SourceChannelType: room.SourceChannelType,
-			RoomID:            room.RoomID,
-			Creator:           room.Creator,
-			Token:             tokenResult.Token,
-			URL:               tokenResult.URL,
-			RTCType:           room.RTCType,
-			Status:            room.Status,
-			CreatedAt:         ps.timeFormatter.FormatDateTime(room.CreatedAt),
-			MaxParticipants:   room.MaxParticipants,
-			Timeout:           tokenResult.Timeout,
-			UIDs:              uids,
+			RoomID:          room.RoomID,
+			Creator:         room.Creator,
+			Token:           tokenResult.Token,
+			URL:             tokenResult.URL,
+			RTCType:         room.RTCType,
+			Status:          room.Status,
+			CreatedAt:       ps.timeFormatter.FormatDateTime(room.CreatedAt),
+			MaxParticipants: room.MaxParticipants,
+			Timeout:         tokenResult.Timeout,
+			UIDs:            uids,
 		})
 	}
 

@@ -4,8 +4,6 @@
 
 CREATE TABLE IF NOT EXISTS rtc_room (
     id INT AUTO_INCREMENT PRIMARY KEY COMMENT '房间ID',
-    source_channel_id VARCHAR(100) NOT NULL DEFAULT '' COMMENT '源渠道ID',
-    source_channel_type SMALLINT NOT NULL DEFAULT 0 COMMENT '源渠道类型',
     creator VARCHAR(40) NOT NULL DEFAULT '' COMMENT '房间创建者',
     room_id VARCHAR(40) NOT NULL DEFAULT '' COMMENT '房间ID',
     rtc_type SMALLINT NOT NULL DEFAULT 0 COMMENT '0: 语音, 1: 视频',

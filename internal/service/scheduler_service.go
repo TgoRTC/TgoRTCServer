@@ -82,7 +82,6 @@ func (ss *SchedulerService) Stop() {
 func (ss *SchedulerService) checkParticipantTimeout() {
 	// 获取所有状态为 0（邀请中）的参与者
 	logger := utils.GetLogger()
-	logger.Info("检查超时的参与者---->")
 	var participants []models.Participant
 	if err := ss.db.Where("status = ?", models.ParticipantStatusInviting).Find(&participants).Error; err != nil {
 		logger.Error("查询邀请中的参与者失败",
