@@ -24,6 +24,7 @@ const (
 	BusinessEventParticipantRejected  = "participant.rejected"  // 参与者已拒绝
 	BusinessEventParticipantMissed    = "participant.missed"    // 参与者已超时
 	BusinessEventParticipantCancelled = "participant.cancelled" // 参与者已取消
+	BusinessEventParticipantInvited   = "participant.invited"   // 参与者已邀请
 )
 
 // RoomEventData 房间事件数据
@@ -43,11 +44,12 @@ type RoomEventData struct {
 }
 
 // ParticipantEventData 参与者事件数据
-// 用于所有参与者相关事件：joined, left, rejected, timeout, missed, cancelled
+// 用于所有参与者相关事件：joined, left, rejected, timeout, missed, cancelled, invited
 type ParticipantEventData struct {
-	RoomEventData        // 嵌入房间事件数据
-	UID           string `json:"uid"`         // 操作者 UID（加入者/离开者/拒绝者等）
-	DeviceType    string `json:"device_type"` // 设备类型
+	RoomEventData          // 嵌入房间事件数据
+	UID           string   `json:"uid"`          // 操作者 UID（加入者/离开者/拒绝者等）
+	DeviceType    string   `json:"device_type"`  // 设备类型
+	InvitedUIDs   []string `json:"invited_uids"` // 被邀请的参与者uids 事件类型为invited有值
 }
 
 // BusinessWebhookRequest 业务 webhook 请求

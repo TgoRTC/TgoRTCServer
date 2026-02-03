@@ -316,6 +316,7 @@ paths:
         - `room.finished` - 房间已结束（所有参与者离开或超时时触发）
 
         **参与者事件：**
+        - `participant.invited` - 参与者被邀请（创建房间或邀请用户时触发，通知被邀请者有来电）
         - `participant.joined` - 参与者已加入（参与者成功加入房间）
         - `participant.left` - 参与者已离开（参与者正常离开房间）
         - `participant.rejected` - 参与者已拒绝（参与者拒绝加入房间）
@@ -331,6 +332,7 @@ paths:
             enum:
               - room.started
               - room.finished
+              - participant.invited
               - participant.joined
               - participant.left
               - participant.rejected
@@ -370,6 +372,27 @@ paths:
                   uids: ["user_001"]
                   created_at: 1704096500
                   updated_at: 1704096600
+              participant.invited:
+                summary: 参与者被邀请事件
+                description: |
+                  请求 URL: /tgortc/webhook?event_type=participant.invited&event_id=1704096550-inv123
+                  
+                  当创建房间或邀请用户时触发，用于通知被邀请者有来电。业务系统收到此事件后应向被邀请者推送来电通知。
+                value:
+                  source_channel_id: "channel_001"
+                  source_channel_type: 0
+                  room_id: "room_abc123"
+                  creator: "user_001"
+                  rtc_type: 1
+                  invite_on: 0
+                  status: 0
+                  max_participants: 2
+                  duration: 0
+                  uids: ["user_001", "user_002"]
+                  created_at: 1704096500
+                  updated_at: 1704096550
+                  uid: "user_002"
+                  invited_uids: ["user_003", "user_004"]
               room.finished:
                 summary: 房间已结束事件
                 description: "请求 URL: /tgortc/webhook?event_type=room.finished&event_id=1704096900-xyz789"
@@ -763,7 +786,7 @@ components:
 
     ParticipantEventData:
       type: object
-      description: 参与者事件数据（用于 participant.joined、participant.left、participant.rejected、participant.missed、participant.cancelled 事件）
+      description: 参与者事件数据（用于 participant.invited、participant.joined、participant.left、participant.rejected、participant.missed、participant.cancelled 事件）
       allOf:
         - $ref: '#/components/schemas/RoomEventData'
         - type: object

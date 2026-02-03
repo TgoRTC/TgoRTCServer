@@ -418,12 +418,20 @@ func (ps *ParticipantService) InviteParticipants(req *models.InviteParticipantRe
 		return errors.NewBusinessErrorWithKey(i18n.RoomQueryFailed, err.Error())
 	}
 
+	// 查询房间参与者
+	var roomParticipants []models.Participant
+	if err := ps.db.Where("room_id = ?", req.RoomID).Find(&roomParticipants).Error; err != nil {
+		return errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
+	}
+
 	// 检查当前房间参与者人数（包括邀请中和已加入的）
 	var currentParticipantCount int64
-	if err := ps.db.Model(&models.Participant{}).
-		Where("room_id = ? AND status IN ?", req.RoomID, []int{models.ParticipantStatusInviting, models.ParticipantStatusJoined}).
-		Count(&currentParticipantCount).Error; err != nil {
-		return errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
+	// 这里直接用已查到的 roomParticipants 计算当前人数（只统计邀请中和已加入的）
+	currentParticipantCount = 0
+	for _, p := range roomParticipants {
+		if p.Status == models.ParticipantStatusInviting || p.Status == models.ParticipantStatusJoined {
+			currentParticipantCount++
+		}
 	}
 
 	// 检查邀请后是否会超过最大人数
@@ -468,6 +476,17 @@ func (ps *ParticipantService) InviteParticipants(req *models.InviteParticipantRe
 		}
 		return nil
 	})
+
+	// 发送邀请业务 webhook 事件
+	if ps.businessWebhookService != nil {
+		joinedUids := make([]string, 0, len(roomParticipants))
+		for _, p := range roomParticipants {
+			if p.Status == models.ParticipantStatusJoined {
+				joinedUids = append(joinedUids, p.UID)
+			}
+		}
+		ps.businessWebhookService.sendParticipantInvited(&room, joinedUids, req.UIDs)
+	}
 
 	return err
 }

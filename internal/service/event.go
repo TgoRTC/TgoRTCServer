@@ -333,6 +333,36 @@ func (bws *BusinessWebhookService) sendParticipantCancelled(room *models.Room, u
 	}
 }
 
+// 发送参与者邀请事件
+func (bws *BusinessWebhookService) sendParticipantInvited(room *models.Room, uids []string, invitedUids []string) {
+	logger := utils.GetLogger()
+	eventData := &models.ParticipantEventData{
+		RoomEventData: models.RoomEventData{
+			SourceChannelID:   room.SourceChannelID,
+			SourceChannelType: room.SourceChannelType,
+			RoomID:            room.RoomID,
+			Creator:           room.Creator,
+			RTCType:           room.RTCType,
+			InviteOn:          room.InviteOn,
+			Status:            models.RoomStatusInProgress,
+			MaxParticipants:   room.MaxParticipants,
+			Uids:              uids,
+			CreatedAt:         room.CreatedAt.Unix(),
+			UpdatedAt:         room.UpdatedAt.Unix(),
+		},
+		UID:         room.Creator, // 邀请者是房间创建者
+		InvitedUIDs: invitedUids,
+	}
+	// 发送一次 webhook 事件
+	if err := bws.SendEvent(models.BusinessEventParticipantInvited, eventData); err != nil {
+		logger.Error("发送业务 webhook 事件失败",
+			zap.String("room_id", room.RoomID),
+			zap.String("event_type", models.BusinessEventParticipantInvited),
+			zap.Error(err),
+		)
+	}
+}
+
 // 获取房间所有参与者的 UID 列表
 func (bws *BusinessWebhookService) getRoomParticipantsUids(roomID string) ([]string, error) {
 	logger := utils.GetLogger()
