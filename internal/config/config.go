@@ -63,14 +63,14 @@ func LoadConfig() *Config {
 		}
 	}
 
-	liveKitTimeout := 3600 // 默认 1 小时
+	liveKitTimeout := 60 // 默认 1 分钟
 	if timeout := os.Getenv("LIVEKIT_TIMEOUT"); timeout != "" {
 		if t, err := strconv.Atoi(timeout); err == nil {
 			liveKitTimeout = t
 		}
 	}
 
-	participantTimeoutCheckInterval := 10 // 默认 10 秒
+	participantTimeoutCheckInterval := 30 // 默认 30 秒（作为精确定时器的兜底机制）
 	if interval := os.Getenv("PARTICIPANT_TIMEOUT_CHECK_INTERVAL"); interval != "" {
 		if i, err := strconv.Atoi(interval); err == nil {
 			participantTimeoutCheckInterval = i

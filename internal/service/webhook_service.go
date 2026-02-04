@@ -41,10 +41,6 @@ func (ws *WebhookService) SetBusinessWebhookService(bws *BusinessWebhookService)
 // 支持分布式环境中的事件去重（使用 Redis）
 func (ws *WebhookService) HandleWebhookEvent(event *models.WebhookEvent) error {
 	logger := utils.GetLogger()
-	logger.Info("收到 webhook 事件",
-		zap.String("event_type", event.Event),
-		zap.String("event_id", event.ID),
-	)
 
 	// 使用 Redis 进行事件去重（防止分布式环境中的重复处理）
 	if ws.redisClient != nil {
@@ -64,10 +60,6 @@ func (ws *WebhookService) HandleWebhookEvent(event *models.WebhookEvent) error {
 			)
 		} else if exists > 0 {
 			// 事件已处理过，直接返回
-			logger.Info("livekit 事件已处理过，跳过",
-				zap.String("event_type", event.Event),
-				zap.String("event_id", event.ID),
-			)
 			return nil
 		}
 
@@ -114,10 +106,6 @@ func (ws *WebhookService) handleRoomStarted(event *models.WebhookEvent) error {
 		return nil
 	}
 	logger := utils.GetLogger()
-	logger.Info("livekit事件---> 房间已开始",
-		zap.String("room_name", event.Room.Name),
-		zap.String("room_sid", event.Room.SID),
-	)
 
 	// 1、查询房间是否存在，如果存在则更新状态为进行中
 	var room models.Room
@@ -159,10 +147,7 @@ func (ws *WebhookService) handleRoomFinished(event *models.WebhookEvent) error {
 		return nil
 	}
 	logger := utils.GetLogger()
-	logger.Info("livekit事件: 房间结束",
-		zap.String("room_name", event.Room.Name),
-		zap.String("room_sid", event.Room.SID),
-	)
+
 	// 更新房间状态为已结束
 	if err := ws.db.Model(&models.Room{}).
 		Where("room_id = ?", event.Room.Name).
@@ -239,13 +224,6 @@ func (ws *WebhookService) handleParticipantJoined(event *models.WebhookEvent) er
 		}
 	}
 
-	logger.Info("参与者已加入",
-		zap.String("participant_name", event.Participant.Name),
-		zap.String("participant_identity", event.Participant.Identity),
-		zap.String("room_name", event.Room.Name),
-		zap.String("device_type", deviceType),
-	)
-
 	// 1、判断参与者是否在 rtc_participant 表存在
 	var participant models.Participant
 	if err := ws.db.Where("room_id = ? AND uid = ?", event.Room.Name, event.Participant.Identity).First(&participant).Error; err != nil {
@@ -266,11 +244,6 @@ func (ws *WebhookService) handleParticipantJoined(event *models.WebhookEvent) er
 				)
 				return err
 			}
-			logger.Info("参与者记录已创建",
-				zap.String("room_id", event.Room.Name),
-				zap.String("uid", event.Participant.Identity),
-				zap.String("device_type", deviceType),
-			)
 		} else {
 			logger.Error("查询参与者记录失败",
 				zap.String("room_id", event.Room.Name),
@@ -293,11 +266,6 @@ func (ws *WebhookService) handleParticipantJoined(event *models.WebhookEvent) er
 			)
 			return err
 		}
-		logger.Info("参与者状态已更新为已加入",
-			zap.String("room_id", event.Room.Name),
-			zap.String("uid", event.Participant.Identity),
-			zap.String("device_type", deviceType),
-		)
 	}
 
 	// 2、通知业务的 webhook
@@ -324,11 +292,6 @@ func (ws *WebhookService) handleParticipantLeft(event *models.WebhookEvent) erro
 		return nil
 	}
 	logger := utils.GetLogger()
-	logger.Info("livekit事件: 参与者离开--->",
-		zap.String("participant_name", event.Participant.Name),
-		zap.String("participant_identity", event.Participant.Identity),
-		zap.String("room_name", event.Room.Name),
-	)
 
 	// 1、查询房间信息
 	var room models.Room
@@ -347,10 +310,6 @@ func (ws *WebhookService) handleParticipantLeft(event *models.WebhookEvent) erro
 	}
 	// 如果房间已经结束或取消，则跳过
 	if room.Status > models.RoomStatusInProgress {
-		logger.Error("livekit事件: 参与者离开--->房间状态已经修改，跳过参与者离开事件",
-			zap.String("room_id", event.Room.Name),
-			zap.Uint8("room_status", room.Status),
-		)
 		return nil
 	}
 
@@ -436,11 +395,6 @@ func (ws *WebhookService) handleParticipantLeft(event *models.WebhookEvent) erro
 			logger.Error("livekit事件: 参与者离开--->更新其他参与者状态失败",
 				zap.String("room_id", event.Room.Name),
 				zap.Error(err),
-			)
-		} else {
-			logger.Info("livekit事件: 参与者离开--->其他邀请中的参与者状态已更新",
-				zap.String("room_id", event.Room.Name),
-				zap.Int("other_participant_status", int(otherParticipantStatus)),
 			)
 		}
 	} else {

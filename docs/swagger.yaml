@@ -360,8 +360,6 @@ paths:
                 summary: 房间已开始事件
                 description: "请求 URL: /tgortc/webhook?event_type=room.started&event_id=1704096600-abc123"
                 value:
-                  source_channel_id: "channel_001"
-                  source_channel_type: 0
                   room_id: "room_abc123"
                   creator: "user_001"
                   rtc_type: 1
@@ -379,8 +377,6 @@ paths:
                   
                   当创建房间或邀请用户时触发，用于通知被邀请者有来电。业务系统收到此事件后应向被邀请者推送来电通知。
                 value:
-                  source_channel_id: "channel_001"
-                  source_channel_type: 0
                   room_id: "room_abc123"
                   creator: "user_001"
                   rtc_type: 1
@@ -397,8 +393,6 @@ paths:
                 summary: 房间已结束事件
                 description: "请求 URL: /tgortc/webhook?event_type=room.finished&event_id=1704096900-xyz789"
                 value:
-                  source_channel_id: "channel_001"
-                  source_channel_type: 0
                   room_id: "room_abc123"
                   creator: "user_001"
                   rtc_type: 1
@@ -413,8 +407,6 @@ paths:
                 summary: 参与者已加入事件
                 description: "请求 URL: /tgortc/webhook?event_type=participant.joined&event_id=1704096700-def456"
                 value:
-                  source_channel_id: "channel_001"
-                  source_channel_type: 0
                   room_id: "room_abc123"
                   creator: "user_001"
                   rtc_type: 1
@@ -431,8 +423,6 @@ paths:
                 summary: 参与者已离开事件
                 description: "请求 URL: /tgortc/webhook?event_type=participant.left&event_id=1704096800-ghi789"
                 value:
-                  source_channel_id: "channel_001"
-                  source_channel_type: 0
                   room_id: "room_abc123"
                   creator: "user_001"
                   rtc_type: 1
@@ -457,17 +447,8 @@ components:
     CreateRoomRequest:
       type: object
       required:
-        - source_channel_id
         - creator
       properties:
-        source_channel_id:
-          type: string
-          description: 源渠道 ID
-          example: "channel_123"
-        source_channel_type:
-          type: integer
-          description: 源渠道类型
-          example: 0
         creator:
           type: string
           description: 房间创建者 ID
@@ -502,14 +483,6 @@ components:
     CreateRoomResponse:
       type: object
       properties:
-        source_channel_id:
-          type: string
-          description: 来源渠道 ID
-          example: "channel_001"
-        source_channel_type:
-          type: integer
-          description: 来源渠道类型
-          example: 0
         room_id:
           type: string
           description: 房间 ID
@@ -721,7 +694,6 @@ components:
       type: object
       description: 房间事件数据（用于 room.started、room.finished 事件）
       required:
-        - source_channel_id
         - room_id
         - creator
         - rtc_type
@@ -730,14 +702,6 @@ components:
         - created_at
         - updated_at
       properties:
-        source_channel_id:
-          type: string
-          description: 来源渠道 ID
-          example: "channel_001"
-        source_channel_type:
-          type: integer
-          description: 来源渠道类型
-          example: 0
         room_id:
           type: string
           description: 房间 ID

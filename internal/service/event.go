@@ -78,11 +78,7 @@ func (ps *BusinessWebhookService) checkAndFinishRoom(room *models.Room) {
 			isSendWebhook = true
 		}
 	}
-	logger.Info("checkAndFinishRoom: 房间状态",
-		zap.String("room_id", room.RoomID),
-		zap.Int("room_status", int(room.Status)),
-		zap.Bool("isSendWebhook", isSendWebhook),
-	)
+
 	if isSendWebhook {
 		// 计算通话时长
 		var startTime int64 = 0
@@ -118,16 +114,14 @@ func (ps *BusinessWebhookService) checkAndFinishRoom(room *models.Room) {
 func (bws *BusinessWebhookService) sendRoomStarted(room *models.Room) {
 	logger := utils.GetLogger()
 	eventData := &models.RoomEventData{
-		SourceChannelID:   room.SourceChannelID,
-		SourceChannelType: room.SourceChannelType,
-		RoomID:            room.RoomID,
-		Creator:           room.Creator,
-		RTCType:           room.RTCType,
-		InviteOn:          room.InviteOn,
-		Status:            models.RoomStatusInProgress,
-		MaxParticipants:   room.MaxParticipants,
-		CreatedAt:         room.CreatedAt.Unix(),
-		UpdatedAt:         room.UpdatedAt.Unix(),
+		RoomID:          room.RoomID,
+		Creator:         room.Creator,
+		RTCType:         room.RTCType,
+		InviteOn:        room.InviteOn,
+		Status:          models.RoomStatusInProgress,
+		MaxParticipants: room.MaxParticipants,
+		CreatedAt:       room.CreatedAt.Unix(),
+		UpdatedAt:       room.UpdatedAt.Unix(),
 	}
 	uids, err := bws.getRoomParticipantsUids(room.RoomID)
 	if err != nil {
@@ -150,18 +144,16 @@ func (bws *BusinessWebhookService) sendRoomFinished(room *models.Room, duration 
 
 	// 构建事件数据
 	eventData := &models.RoomEventData{
-		SourceChannelID:   room.SourceChannelID,
-		SourceChannelType: room.SourceChannelType,
-		RoomID:            room.RoomID,
-		Creator:           room.Creator,
-		RTCType:           room.RTCType,
-		InviteOn:          room.InviteOn,
-		Status:            room.Status,
-		Uids:              uids,
-		MaxParticipants:   room.MaxParticipants,
-		CreatedAt:         room.CreatedAt.Unix(),
-		UpdatedAt:         room.UpdatedAt.Unix(),
-		Duration:          duration,
+		RoomID:          room.RoomID,
+		Creator:         room.Creator,
+		RTCType:         room.RTCType,
+		InviteOn:        room.InviteOn,
+		Status:          room.Status,
+		Uids:            uids,
+		MaxParticipants: room.MaxParticipants,
+		CreatedAt:       room.CreatedAt.Unix(),
+		UpdatedAt:       room.UpdatedAt.Unix(),
+		Duration:        duration,
 	}
 	// 发送业务 webhook 通知（确保同一个房间只发送一次）
 	if err := bws.SendRoomFinishedEventOnce(room.RoomID, eventData); err != nil {
@@ -178,16 +170,14 @@ func (bws *BusinessWebhookService) sendParticipantJoined(room *models.Room, uid 
 	logger := utils.GetLogger()
 	eventData := &models.ParticipantEventData{
 		RoomEventData: models.RoomEventData{
-			SourceChannelID:   room.SourceChannelID,
-			SourceChannelType: room.SourceChannelType,
-			RoomID:            room.RoomID,
-			Creator:           room.Creator,
-			RTCType:           room.RTCType,
-			InviteOn:          room.InviteOn,
-			Status:            room.Status,
-			MaxParticipants:   room.MaxParticipants,
-			CreatedAt:         room.CreatedAt.Unix(),
-			UpdatedAt:         room.UpdatedAt.Unix(),
+			RoomID:          room.RoomID,
+			Creator:         room.Creator,
+			RTCType:         room.RTCType,
+			InviteOn:        room.InviteOn,
+			Status:          room.Status,
+			MaxParticipants: room.MaxParticipants,
+			CreatedAt:       room.CreatedAt.Unix(),
+			UpdatedAt:       room.UpdatedAt.Unix(),
 		},
 		UID:        uid,        // 加入者 UID
 		DeviceType: deviceType, // 设备类型
@@ -214,17 +204,15 @@ func (bws *BusinessWebhookService) sendParticipantLeft(room *models.Room, uid st
 	logger := utils.GetLogger()
 	eventData := &models.ParticipantEventData{
 		RoomEventData: models.RoomEventData{
-			SourceChannelID:   room.SourceChannelID,
-			SourceChannelType: room.SourceChannelType,
-			RoomID:            room.RoomID,
-			Creator:           room.Creator,
-			RTCType:           room.RTCType,
-			InviteOn:          room.InviteOn,
-			Status:            room.Status,
-			MaxParticipants:   room.MaxParticipants,
-			Uids:              uids,
-			CreatedAt:         room.CreatedAt.Unix(),
-			UpdatedAt:         time.Now().Unix(),
+			RoomID:          room.RoomID,
+			Creator:         room.Creator,
+			RTCType:         room.RTCType,
+			InviteOn:        room.InviteOn,
+			Status:          room.Status,
+			MaxParticipants: room.MaxParticipants,
+			Uids:            uids,
+			CreatedAt:       room.CreatedAt.Unix(),
+			UpdatedAt:       time.Now().Unix(),
 		},
 		UID: uid, // 离开者是当前离开的参与者
 	}
@@ -243,17 +231,15 @@ func (bws *BusinessWebhookService) sendParticipantRejected(room *models.Room, ui
 	logger := utils.GetLogger()
 	eventData := &models.ParticipantEventData{
 		RoomEventData: models.RoomEventData{
-			SourceChannelID:   room.SourceChannelID,
-			SourceChannelType: room.SourceChannelType,
-			RoomID:            room.RoomID,
-			Creator:           room.Creator,
-			RTCType:           room.RTCType,
-			Uids:              uids,
-			InviteOn:          room.InviteOn,
-			Status:            room.Status,
-			MaxParticipants:   room.MaxParticipants,
-			CreatedAt:         room.CreatedAt.Unix(),
-			UpdatedAt:         time.Now().Unix(),
+			RoomID:          room.RoomID,
+			Creator:         room.Creator,
+			RTCType:         room.RTCType,
+			Uids:            uids,
+			InviteOn:        room.InviteOn,
+			Status:          room.Status,
+			MaxParticipants: room.MaxParticipants,
+			CreatedAt:       room.CreatedAt.Unix(),
+			UpdatedAt:       time.Now().Unix(),
 		},
 		UID: uid, // 拒绝者是当前离开的参与者
 	}
@@ -269,22 +255,20 @@ func (bws *BusinessWebhookService) sendParticipantRejected(room *models.Room, ui
 }
 
 // 发送参与者超时事件
-func (bws *BusinessWebhookService) sendParticipantMissed(room *models.Room, uid string) {
+func (bws *BusinessWebhookService) sendParticipantMissed(room *models.Room, uids []string) {
 	logger := utils.GetLogger()
 	eventData := &models.ParticipantEventData{
 		RoomEventData: models.RoomEventData{
-			SourceChannelID:   room.SourceChannelID,
-			SourceChannelType: room.SourceChannelType,
-			RoomID:            room.RoomID,
-			Creator:           room.Creator,
-			RTCType:           room.RTCType,
-			InviteOn:          room.InviteOn,
-			Status:            room.Status,
-			MaxParticipants:   room.MaxParticipants,
-			CreatedAt:         room.CreatedAt.Unix(),
-			UpdatedAt:         room.UpdatedAt.Unix(),
+			RoomID:          room.RoomID,
+			Creator:         room.Creator,
+			RTCType:         room.RTCType,
+			InviteOn:        room.InviteOn,
+			Status:          room.Status,
+			MaxParticipants: room.MaxParticipants,
+			CreatedAt:       room.CreatedAt.Unix(),
+			UpdatedAt:       room.UpdatedAt.Unix(),
 		},
-		UID: uid,
+		MissedUIDs: uids,
 	}
 	uids, err := bws.getRoomParticipantsUids(room.RoomID)
 	if err != nil {
@@ -295,8 +279,8 @@ func (bws *BusinessWebhookService) sendParticipantMissed(room *models.Room, uid 
 	if err := bws.SendEvent(models.BusinessEventParticipantMissed, eventData); err != nil {
 		logger.Error("发送业务 webhook 事件失败",
 			zap.String("room_id", room.RoomID),
-			zap.String("uid", uid),
 			zap.String("event_type", models.BusinessEventParticipantMissed),
+			zap.Strings("missed_uids", uids),
 			zap.Error(err),
 		)
 		// 不返回错误，继续处理其他参与者
@@ -309,17 +293,15 @@ func (bws *BusinessWebhookService) sendParticipantCancelled(room *models.Room, u
 	// 构建事件数据
 	eventData := &models.ParticipantEventData{
 		RoomEventData: models.RoomEventData{
-			SourceChannelID:   room.SourceChannelID,
-			SourceChannelType: room.SourceChannelType,
-			RoomID:            room.RoomID,
-			Creator:           room.Creator,
-			RTCType:           room.RTCType,
-			InviteOn:          room.InviteOn,
-			Status:            models.RoomStatusCancelled,
-			MaxParticipants:   room.MaxParticipants,
-			Uids:              uids,
-			CreatedAt:         room.CreatedAt.Unix(),
-			UpdatedAt:         time.Now().Unix(),
+			RoomID:          room.RoomID,
+			Creator:         room.Creator,
+			RTCType:         room.RTCType,
+			InviteOn:        room.InviteOn,
+			Status:          models.RoomStatusCancelled,
+			MaxParticipants: room.MaxParticipants,
+			Uids:            uids,
+			CreatedAt:       room.CreatedAt.Unix(),
+			UpdatedAt:       time.Now().Unix(),
 		},
 		UID: room.Creator, // 取消者是房间创建者
 	}
@@ -338,17 +320,15 @@ func (bws *BusinessWebhookService) sendParticipantInvited(room *models.Room, uid
 	logger := utils.GetLogger()
 	eventData := &models.ParticipantEventData{
 		RoomEventData: models.RoomEventData{
-			SourceChannelID:   room.SourceChannelID,
-			SourceChannelType: room.SourceChannelType,
-			RoomID:            room.RoomID,
-			Creator:           room.Creator,
-			RTCType:           room.RTCType,
-			InviteOn:          room.InviteOn,
-			Status:            models.RoomStatusInProgress,
-			MaxParticipants:   room.MaxParticipants,
-			Uids:              uids,
-			CreatedAt:         room.CreatedAt.Unix(),
-			UpdatedAt:         room.UpdatedAt.Unix(),
+			RoomID:          room.RoomID,
+			Creator:         room.Creator,
+			RTCType:         room.RTCType,
+			InviteOn:        room.InviteOn,
+			Status:          models.RoomStatusInProgress,
+			MaxParticipants: room.MaxParticipants,
+			Uids:            uids,
+			CreatedAt:       room.CreatedAt.Unix(),
+			UpdatedAt:       room.UpdatedAt.Unix(),
 		},
 		UID:         room.Creator, // 邀请者是房间创建者
 		InvitedUIDs: invitedUids,

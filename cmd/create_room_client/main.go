@@ -11,9 +11,7 @@ import (
 )
 
 type CreateRoomRequest struct {
-	SourceChannelID   string   `json:"source_channel_id"`
-	SourceChannelType int      `json:"source_channel_type"`
-	Creator           string   `json:"creator"`
+	Creator string `json:"creator"`
 	RoomID            string   `json:"room_id"`
 	RTCType           int      `json:"rtc_type"`
 	InviteOn          int      `json:"invite_on"`
@@ -28,9 +26,7 @@ func main() {
 	}
 
 	payload := CreateRoomRequest{
-		SourceChannelID:   "test_channel_001",
-		SourceChannelType: 0,
-		Creator:           "user001",
+		Creator: "user001",
 		RTCType:           1,
 		InviteOn:          1,
 		MaxParticipants:   4,

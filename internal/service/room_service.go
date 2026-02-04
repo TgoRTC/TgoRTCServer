@@ -19,6 +19,7 @@ type RoomService struct {
 	tokenGenerator          *livekit.TokenGenerator
 	timeFormatter           *utils.TimeFormatter
 	participantDeduplicator *utils.ParticipantDeduplicator
+	schedulerService        *SchedulerService
 }
 
 // NewRoomService 创建房间服务
@@ -31,8 +32,18 @@ func NewRoomService(db *gorm.DB, tokenGenerator *livekit.TokenGenerator) *RoomSe
 	}
 }
 
+// SetSchedulerService 设置调度器服务
+func (rs *RoomService) SetSchedulerService(ss *SchedulerService) {
+	rs.schedulerService = ss
+}
+
 // CreateRoom 创建房间
 func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.CreateRoomResponse, error) {
+	// 0. 兼容 UIDs 未传递的情况，初始化为空切片
+	if req.UIDs == nil {
+		req.UIDs = []string{}
+	}
+
 	// 1. 如果 room_id 没有传递，则生成 UUID（去掉 '-'）
 	roomID := req.RoomID
 	if roomID == "" {
@@ -47,17 +58,7 @@ func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.Create
 		}
 	}
 
-	// 3. 检查 source_channel_id 和 source_channel_type 是否存在正在通话的房间
-	var activeRoom models.Room
-	if err := rs.db.Where("source_channel_id = ? AND source_channel_type = ? AND (status = ? OR status = ?)",
-		req.SourceChannelID, req.SourceChannelType, models.RoomStatusNotStarted, models.RoomStatusInProgress).
-		First(&activeRoom).Error; err == nil {
-		return nil, errors.NewBusinessErrorWithKey(i18n.ChannelHasActiveRoom)
-	} else if err != gorm.ErrRecordNotFound {
-		return nil, errors.NewBusinessErrorWithKey(i18n.RoomQueryFailed, err.Error())
-	}
-
-	// 4. 检查 creator 是否在 rtc_participant 表存在 status=0/1 的情况
+	// 3. 检查 creator 是否在 rtc_participant 表存在 status=0/1 的情况
 	var participant models.Participant
 	if err := rs.db.Where("uid = ? AND (status = ? OR status = ?)",
 		req.Creator, models.ParticipantStatusInviting, models.ParticipantStatusJoined).
@@ -101,9 +102,7 @@ func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.Create
 	err := rs.db.Transaction(func(tx *gorm.DB) error {
 		// 创建房间
 		room := models.Room{
-			SourceChannelID:   req.SourceChannelID,
-			SourceChannelType: req.SourceChannelType,
-			Creator:           req.Creator,
+			Creator: req.Creator,
 			RoomID:            roomID,
 			RTCType:           req.RTCType,
 			InviteOn:          req.InviteOn,
@@ -152,6 +151,17 @@ func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.Create
 	if isBusy {
 		return nil, errors.NewConflictError(i18n.ParticipantInCall, busyParticipantUID)
 	}
+
+	// 为所有参与者设置超时定时器
+	if rs.schedulerService != nil {
+		// 为创建者设置定时器
+		rs.schedulerService.ScheduleParticipantTimeout(roomID, req.Creator)
+		// 为被邀请者设置定时器
+		for _, uid := range deduplicatedUIDs {
+			rs.schedulerService.ScheduleParticipantTimeout(roomID, uid)
+		}
+	}
+
 	// 生成 Token 和获取配置信息
 	tokenResult, err := rs.tokenGenerator.GenerateTokenWithConfig(roomID, req.Creator, req.DeviceType)
 	if err != nil {
@@ -161,9 +171,7 @@ func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.Create
 	uids := append(req.UIDs, req.Creator)
 	uids = rs.participantDeduplicator.DeduplicateUIDs(uids)
 	return &models.CreateRoomResponse{
-		SourceChannelID:   req.SourceChannelID,
-		SourceChannelType: req.SourceChannelType,
-		RoomID:            roomID,
+		RoomID: roomID,
 		Creator:           req.Creator,
 		Token:             tokenResult.Token,
 		URL:               tokenResult.URL,

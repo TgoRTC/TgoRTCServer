@@ -133,10 +133,6 @@ func (bws *BusinessWebhookService) SendRoomFinishedEventOnce(roomID string, data
 		// 不返回错误，因为事件已经发送成功
 	}
 
-	logger.Info("✅ 房间完成事件已发送",
-		zap.String("room_id", roomID),
-	)
-
 	return nil
 }
 
@@ -220,12 +216,6 @@ func (bws *BusinessWebhookService) sendToEndpoint(endpoint config.WebhookEndpoin
 
 	// 检查响应状态
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		logger.Info("webhook 事件发送成功",
-			zap.String("url", finalURL),
-			zap.String("event_type", event.EventType),
-			zap.String("event_id", event.EventID),
-			zap.Int("status_code", resp.StatusCode),
-		)
 		// 成功的请求不记录日志
 	} else {
 		logger.Warn("webhook 事件发送失败",
@@ -309,11 +299,6 @@ func (bws *BusinessWebhookService) CleanupOldLogs(retentionDays int) error {
 		return result.Error
 	}
 
-	logger.Info("webhook 日志清理完成",
-		zap.Int64("deleted_count", result.RowsAffected),
-		zap.Time("cutoff_time", cutoffTime),
-	)
-
 	return nil
 }
 
@@ -362,21 +347,16 @@ func (bws *BusinessWebhookService) GetLogStats() (map[string]interface{}, error)
 // ArchiveOldLogs 归档旧日志到另一个表（可选）
 // 这个方法可以用于将旧日志移到归档表中
 func (bws *BusinessWebhookService) ArchiveOldLogs(retentionDays int) error {
-	logger := utils.GetLogger()
-
 	if retentionDays <= 0 {
 		retentionDays = 90 // 默认保留 90 天后归档
 	}
 
 	// 计算截断时间
-	cutoffTime := time.Now().AddDate(0, 0, -retentionDays)
+	// cutoffTime := time.Now().AddDate(0, 0, -retentionDays)
 
 	// 这里可以实现将旧日志复制到归档表的逻辑
 	// 例如：INSERT INTO business_webhook_log_archive SELECT * FROM business_webhook_log WHERE created_at < ?
-
-	logger.Info("webhook 日志归档完成",
-		zap.Time("cutoff_time", cutoffTime),
-	)
+	_ = retentionDays // 占位符，待实现归档逻辑时使用
 
 	return nil
 }

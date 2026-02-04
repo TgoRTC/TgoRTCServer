@@ -57,33 +57,20 @@ func (rh *RoomHandler) CreateRoom(c *gin.Context) {
 			logger.Warn("创建房间业务错误",
 				zap.String("error_key", string(businessErr.Key)),
 				zap.String("error_message", businessErr.GetLocalizedMessage(lang)),
-				zap.String("error_code", businessErr.GetErrorCode()),
+				zap.Int("error_code", businessErr.GetErrorCode()),
 				zap.String("creator", req.Creator),
-				zap.String("source_channel_id", req.SourceChannelID),
 				zap.String("language", lang),
 			)
 		} else {
 			logger.Error("创建房间系统错误",
 				zap.Error(err),
 				zap.String("creator", req.Creator),
-				zap.String("source_channel_id", req.SourceChannelID),
 				zap.String("language", lang),
 			)
 		}
 		utils.RespondWithBusinessError(c, err)
 		return
 	}
-
-	// 记录房间创建成功和 LiveKit 连接信息
-	logger.Info("房间创建成功",
-		zap.String("room_id", resp.RoomID),
-		zap.String("creator", resp.Creator),
-		zap.String("source_channel_id", resp.SourceChannelID),
-		zap.String("livekit_url", resp.URL),
-		zap.Strings("invited_uids", resp.UIDs),
-		zap.Uint8("status", resp.Status),
-		zap.String("language", lang),
-	)
 
 	utils.RespondWithData(c, resp)
 }

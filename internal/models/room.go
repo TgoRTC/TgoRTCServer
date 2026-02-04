@@ -6,10 +6,8 @@ import (
 
 // Room 房间模型
 type Room struct {
-	ID                int       `gorm:"primaryKey" json:"id"`
-	SourceChannelID   string    `gorm:"column:source_channel_id;size:100;not null;default:''" json:"source_channel_id"`
-	SourceChannelType uint8     `gorm:"column:source_channel_type;not null;default:0" json:"source_channel_type"`
-	Creator           string    `gorm:"column:creator;size:40;not null;default:''" json:"creator"`
+	ID      int    `gorm:"primaryKey" json:"id"`
+	Creator string `gorm:"column:creator;size:40;not null;default:''" json:"creator"`
 	RoomID            string    `gorm:"column:room_id;size:40;not null;default:'';uniqueIndex" json:"room_id"`
 	RTCType           uint8     `gorm:"column:rtc_type;not null;default:0" json:"rtc_type"`                 // 0: 语音, 1: 视频
 	InviteOn          uint8     `gorm:"column:invite_on;not null;default:0" json:"invite_on"`               // 0: 否, 1: 是
@@ -49,9 +47,7 @@ const (
 
 // CreateRoomRequest 创建房间请求
 type CreateRoomRequest struct {
-	SourceChannelID   string   `json:"source_channel_id" binding:"required"`
-	SourceChannelType uint8    `json:"source_channel_type"`
-	Creator           string   `json:"creator" binding:"required"`
+	Creator string `json:"creator" binding:"required"`
 	RoomID            string   `json:"room_id"`          // 可选，不传则自动生成 UUID
 	RTCType           uint8    `json:"rtc_type"`         // 0: 语音, 1: 视频
 	InviteOn          uint8    `json:"invite_on"`        // 0: 否, 1: 是
@@ -62,9 +58,7 @@ type CreateRoomRequest struct {
 
 // RoomResp 房间响应（创建房间和加入房间共用）
 type RoomResp struct {
-	SourceChannelID   string   `json:"source_channel_id" binding:"required"`
-	SourceChannelType uint8    `json:"source_channel_type"`
-	RoomID            string   `json:"room_id"`
+	RoomID  string `json:"room_id"`
 	Creator           string   `json:"creator"`
 	Token             string   `json:"token"`
 	URL               string   `json:"url"`

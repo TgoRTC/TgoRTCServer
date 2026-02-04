@@ -29,18 +29,16 @@ const (
 
 // RoomEventData 房间事件数据
 type RoomEventData struct {
-	SourceChannelID   string   `json:"source_channel_id"`
-	SourceChannelType uint8    `json:"source_channel_type"`
-	RoomID            string   `json:"room_id"`
-	Creator           string   `json:"creator"`
-	RTCType           uint8    `json:"rtc_type"`         // 0: 语音, 1: 视频
-	InviteOn          uint8    `json:"invite_on"`        // 0: 否, 1: 是
-	Status            uint8    `json:"status"`           // 房间状态
-	MaxParticipants   int      `json:"max_participants"` // 最大参与者数
-	Duration          int64    `json:"duration"`         // 通话时长（秒）
-	Uids              []string `json:"uids"`             // 参与者uids
-	CreatedAt         int64    `json:"created_at"`
-	UpdatedAt         int64    `json:"updated_at"`
+	RoomID          string   `json:"room_id"`
+	Creator         string   `json:"creator"`
+	RTCType         uint8    `json:"rtc_type"`         // 0: 语音, 1: 视频
+	InviteOn        uint8    `json:"invite_on"`        // 0: 否, 1: 是
+	Status          uint8    `json:"status"`           // 房间状态
+	MaxParticipants int      `json:"max_participants"` // 最大参与者数
+	Duration        int64    `json:"duration"`         // 通话时长（秒）
+	Uids            []string `json:"uids"`             // 参与者uids
+	CreatedAt       int64    `json:"created_at"`
+	UpdatedAt       int64    `json:"updated_at"`
 }
 
 // ParticipantEventData 参与者事件数据
@@ -50,6 +48,7 @@ type ParticipantEventData struct {
 	UID           string   `json:"uid"`          // 操作者 UID（加入者/离开者/拒绝者等）
 	DeviceType    string   `json:"device_type"`  // 设备类型
 	InvitedUIDs   []string `json:"invited_uids"` // 被邀请的参与者uids 事件类型为invited有值
+	MissedUIDs    []string `json:"missed_uids"`  // 超时的参与者uids 事件类型为missed有值
 }
 
 // BusinessWebhookRequest 业务 webhook 请求

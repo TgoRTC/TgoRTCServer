@@ -89,25 +89,6 @@ func (ph *ParticipantHandler) JoinRoom(c *gin.Context) {
 		zap.String("language", lang),
 	)
 
-	// 发送业务 webhook 事件
-	// if ph.businessWebhookService != nil && resp != nil {
-	// 	eventData := &models.ParticipantEventData{
-	// 		RoomEventData: models.RoomEventData{
-	// 			SourceChannelID:   resp.SourceChannelID,
-	// 			SourceChannelType: resp.SourceChannelType,
-	// 			RoomID:            resp.RoomID,
-	// 			Creator:           resp.Creator,
-	// 			RTCType:           resp.RTCType,
-	// 			InviteOn:          0, // 从 resp 中无法获取，设为默认值
-	// 			Status:            resp.Status,
-	// 			MaxParticipants:   resp.MaxParticipants,
-	// 			CreatedAt:         0, // 从 resp 中无法获取，设为默认值
-	// 			UpdatedAt:         0, // 从 resp 中无法获取，设为默认值
-	// 		},
-	// 		UID: req.UID, // 加入者 UID
-	// 	}
-	// 	_ = ph.businessWebhookService.SendEvent(models.BusinessEventParticipantJoined, eventData)
-	// }
 
 	utils.RespondWithData(c, resp)
 }
