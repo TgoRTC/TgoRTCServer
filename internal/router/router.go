@@ -15,8 +15,8 @@ import (
 )
 
 // SetupRouter 设置路由
-// 返回 gin.Engine 和 participantService（用于 scheduler）
-func SetupRouter(db *gorm.DB, redisClient *redis.Client, cfg *config.Config, businessWebhookService *service.BusinessWebhookService) (*gin.Engine, *service.ParticipantService) {
+// 返回 gin.Engine、participantService 和 roomService（用于 scheduler）
+func SetupRouter(db *gorm.DB, redisClient *redis.Client, cfg *config.Config, businessWebhookService *service.BusinessWebhookService) (*gin.Engine, *service.ParticipantService, *service.RoomService) {
 	router := gin.Default()
 
 	// 添加多语言中间件
@@ -80,5 +80,5 @@ func SetupRouter(db *gorm.DB, redisClient *redis.Client, cfg *config.Config, bus
 		}
 	}
 
-	return router, participantService
+	return router, participantService, roomService
 }

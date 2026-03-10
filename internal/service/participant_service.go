@@ -19,6 +19,7 @@ type ParticipantService struct {
 	tokenGenerator         *livekit.TokenGenerator
 	timeFormatter          *utils.TimeFormatter
 	businessWebhookService *BusinessWebhookService
+	schedulerService       *SchedulerService
 }
 
 // NewParticipantService 创建参与者服务
@@ -29,6 +30,11 @@ func NewParticipantService(db *gorm.DB, tokenGenerator *livekit.TokenGenerator, 
 		timeFormatter:          utils.NewTimeFormatter(),
 		businessWebhookService: businessWebhookService,
 	}
+}
+
+// SetSchedulerService 设置调度器服务
+func (ps *ParticipantService) SetSchedulerService(ss *SchedulerService) {
+	ps.schedulerService = ss
 }
 
 // JoinRoom 参与者加入房间
@@ -78,6 +84,10 @@ func (ps *ParticipantService) JoinRoom(req *models.JoinRoomRequest) (*models.Joi
 			"device_type": req.DeviceType,
 		}).Error; err != nil {
 			return nil, errors.NewBusinessErrorWithKey(i18n.ParticipantStatusUpdateFailed, err.Error())
+		}
+		// 取消超时定时器
+		if ps.schedulerService != nil {
+			ps.schedulerService.CancelParticipantTimeout(req.RoomID, req.UID)
 		}
 	} else if err == gorm.ErrRecordNotFound {
 		// 创建新的参与者记录
@@ -178,23 +188,14 @@ func (ps *ParticipantService) LeaveRoom(req *models.LeaveRoomRequest) error {
 			hasMissedOther = true
 		}
 		uids = append(uids, p.UID)
-		logger.Info("参与者状态",
-			zap.String("room_id", req.RoomID),
-			zap.String("uid", p.UID),
-			zap.Int("status", int(p.Status)),
-		)
 		if p.Status == models.ParticipantStatusJoined || p.Status == models.ParticipantStatusHangup {
 			joinedCount++
 		}
 	}
 	if currentParticipant.ID == 0 {
-		logger.Error("离开房间，未查询到参与者信息",
-			zap.String("room_id", req.RoomID),
-			zap.String("uid", req.UID),
-		)
 		return errors.NewBusinessErrorWithKey(i18n.ParticipantNotFound, req.UID)
 	}
-	//
+
 	if currentParticipant.Status == models.ParticipantStatusJoined || currentParticipant.LeaveTime > 0 {
 		hasJoined = true
 	}
@@ -244,9 +245,7 @@ func (ps *ParticipantService) LeaveRoom(req *models.LeaveRoomRequest) error {
 // 发起者主动挂断，对方还未加入 -> 取消通话
 func (ps *ParticipantService) handleCreatorCancelCall(room *models.Room, uids []string) error {
 	logger := utils.GetLogger()
-	logger.Info("发起者取消通话",
-		zap.String("room_id", room.RoomID),
-	)
+
 	// 1. 更新房间状态为已取消
 	if err := ps.db.Model(&models.Room{}).
 		Where("room_id = ?", room.RoomID).
@@ -273,10 +272,6 @@ func (ps *ParticipantService) handleCreatorCancelCall(room *models.Room, uids []
 	// 3. 发送业务 webhook 事件（只发送一次）
 	if ps.businessWebhookService != nil {
 		ps.businessWebhookService.sendParticipantCancelled(room, uids)
-		logger.Info("发送参与者取消事件成功",
-			zap.String("room_id", room.RoomID),
-			zap.Int("room_status", int(room.Status)),
-		)
 		ps.businessWebhookService.checkAndFinishRoom(room)
 	}
 	return nil
@@ -286,10 +281,6 @@ func (ps *ParticipantService) handleCreatorCancelCall(room *models.Room, uids []
 // 参与者未加入就离开 -> 拒绝通话
 func (ps *ParticipantService) handleParticipantReject(room *models.Room, uid string, uids []string) error {
 	logger := utils.GetLogger()
-	logger.Info("参与者拒绝通话",
-		zap.String("room_id", room.RoomID),
-		zap.String("uid", uid),
-	)
 
 	// 1. 更新当前参与者状态为已拒绝
 	if err := ps.db.Model(&models.Participant{}).
@@ -348,10 +339,6 @@ func (ps *ParticipantService) handleParticipantReject(room *models.Room, uid str
 // 参与者已加入后离开 -> 正常挂断
 func (ps *ParticipantService) handleNormalHangup(room *models.Room, uid string, uids []string) error {
 	logger := utils.GetLogger()
-	logger.Info("参与者正常挂断",
-		zap.String("room_id", room.RoomID),
-		zap.String("uid", uid),
-	)
 
 	// 1. 更新当前参与者状态为已挂断
 	if err := ps.db.Model(&models.Participant{}).
@@ -408,6 +395,8 @@ func (ps *ParticipantService) handleNormalHangup(room *models.Room, uid string, 
 
 // InviteParticipants 邀请参与者
 func (ps *ParticipantService) InviteParticipants(req *models.InviteParticipantRequest) error {
+	logger := utils.GetLogger()
+
 	// 检查房间是否存在
 	var room models.Room
 	if err := ps.db.Where("room_id = ?", req.RoomID).First(&room).Error; err != nil {
@@ -417,50 +406,60 @@ func (ps *ParticipantService) InviteParticipants(req *models.InviteParticipantRe
 		return errors.NewBusinessErrorWithKey(i18n.RoomQueryFailed, err.Error())
 	}
 
-	// 查询当前房间所有参与者
-	var allParticipants []models.Participant
-	if err := ps.db.Where("room_id = ?", req.RoomID).Find(&allParticipants).Error; err != nil {
+	// 检查房间状态是否可以邀请（只有未开始或进行中的房间可以邀请）
+	if room.Status != models.RoomStatusNotStarted && room.Status != models.RoomStatusInProgress {
+		return errors.NewBusinessErrorWithKey(i18n.RoomNotActive)
+	}
+
+	// 查询房间参与者
+	var roomParticipants []models.Participant
+	if err := ps.db.Where("room_id = ?", req.RoomID).Find(&roomParticipants).Error; err != nil {
 		return errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
 	}
 
-	// 构建已存在参与者的 UID 映射，并统计活跃参与者数量
-	existingParticipantMap := make(map[string]*models.Participant)
-	activeParticipantCount := 0
-	for i := range allParticipants {
-		p := &allParticipants[i]
-		existingParticipantMap[p.UID] = p
+	// 检查当前房间参与者人数（包括邀请中和已加入的）
+	var currentParticipantCount int64
+	// 这里直接用已查到的 roomParticipants 计算当前人数（只统计邀请中和已加入的）
+	currentParticipantCount = 0
+	for _, p := range roomParticipants {
 		if p.Status == models.ParticipantStatusInviting || p.Status == models.ParticipantStatusJoined {
-			activeParticipantCount++
-		}
-	}
-
-	// 计算新邀请的用户数量（不在当前房间中或状态不是邀请中/已加入的用户）
-	newInviteCount := 0
-	for _, uid := range req.UIDs {
-		if p, exists := existingParticipantMap[uid]; !exists {
-			newInviteCount++
-		} else if p.Status != models.ParticipantStatusInviting && p.Status != models.ParticipantStatusJoined {
-			newInviteCount++
+			currentParticipantCount++
 		}
 	}
 
 	// 检查邀请后是否会超过最大人数
-	if activeParticipantCount+newInviteCount > room.MaxParticipants {
+	if int(currentParticipantCount)+len(req.UIDs) > room.MaxParticipants {
 		return errors.NewBusinessErrorWithKey(i18n.RoomFull)
 	}
 
-	// 在事务中为每个 UID 创建或更新参与者记录
-	// 确保要么所有用户都被邀请成功，要么都失败
-	// 如果任何操作失败，事务会自动回滚
+	// 批量查询该房间中已存在的参与者（限定在 req.UIDs 范围内）
+	var existingParticipants []models.Participant
+	if err := ps.db.Where("room_id = ? AND uid IN ?", req.RoomID, req.UIDs).
+		Find(&existingParticipants).Error; err != nil {
+		return errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
+	}
+
+	// 构建已存在 uid 的 map，便于快速查找
+	existingUIDMap := make(map[string]models.Participant)
+	for _, p := range existingParticipants {
+		existingUIDMap[p.UID] = p
+	}
+
+	// 在事务中处理：已存在的更新状态，不存在的创建新记录
 	err := ps.db.Transaction(func(tx *gorm.DB) error {
 		for _, uid := range req.UIDs {
-			if existingP, exists := existingParticipantMap[uid]; exists {
-				// 参与者已存在，更新状态为邀请中
-				if err := tx.Model(existingP).Update("status", models.ParticipantStatusInviting).Error; err != nil {
-					return errors.NewBusinessErrorWithKey(i18n.InvitedParticipantAddFailed, err.Error())
+			if existingParticipant, exists := existingUIDMap[uid]; exists {
+				// 参与者已存在，更新状态为邀请中，并重置 created_at 以便超时检查重新计时
+				if err := tx.Model(&models.Participant{}).
+					Where("id = ?", existingParticipant.ID).
+					Updates(map[string]interface{}{
+						"status":     models.ParticipantStatusInviting,
+						"created_at": time.Now(),
+					}).Error; err != nil {
+					return errors.NewBusinessErrorWithKey(i18n.ParticipantStatusUpdateFailed, err.Error())
 				}
 			} else {
-				// 创建新的参与者记录
+				// 参与者不存在，创建新记录
 				participant := models.Participant{
 					RoomID: req.RoomID,
 					UID:    uid,
@@ -475,26 +474,31 @@ func (ps *ParticipantService) InviteParticipants(req *models.InviteParticipantRe
 	})
 
 	if err != nil {
+		logger.Error("邀请参与者事务失败",
+			zap.String("room_id", req.RoomID),
+			zap.Error(err),
+		)
 		return err
 	}
 
-	// 发送事件
-	if ps.businessWebhookService != nil {
-		// 构建所有成员的 UIDs（已存在的 + 新邀请的）
-		uidSet := make(map[string]bool)
-		for _, p := range allParticipants {
-			uidSet[p.UID] = true
-		}
+	// 为被邀请的参与者设置超时定时器
+	if ps.schedulerService != nil {
 		for _, uid := range req.UIDs {
-			uidSet[uid] = true
+			ps.schedulerService.ScheduleParticipantTimeout(req.RoomID, uid)
 		}
-		allUIDs := make([]string, 0, len(uidSet))
-		for uid := range uidSet {
-			allUIDs = append(allUIDs, uid)
-		}
-		// allUIDs 是房间所有成员，req.UIDs 是本次邀请的成员
-		ps.businessWebhookService.sendParticipantInvited(&room, allUIDs, req.UIDs)
 	}
+
+	// 发送邀请业务 webhook 事件
+	if ps.businessWebhookService != nil {
+		joinedUids := make([]string, 0, len(roomParticipants))
+		for _, p := range roomParticipants {
+			if p.Status == models.ParticipantStatusJoined {
+				joinedUids = append(joinedUids, p.UID)
+			}
+		}
+		ps.businessWebhookService.sendParticipantInvited(&room, joinedUids, req.UIDs)
+	}
+
 	return nil
 }
 
@@ -533,6 +537,29 @@ func (ps *ParticipantService) GetUserAvailableRooms(uid string, deviceType strin
 		return nil, errors.NewBusinessErrorWithKey(i18n.RoomQueryFailed, err.Error())
 	}
 
+	if len(rooms) == 0 {
+		return []models.RoomResp{}, nil
+	}
+
+	// 提取查询到的房间 ID 列表
+	queryRoomIDs := make([]string, 0, len(rooms))
+	for _, r := range rooms {
+		queryRoomIDs = append(queryRoomIDs, r.RoomID)
+	}
+
+	// 一次性查询这些房间的所有活跃参与者（邀请中或已加入）
+	var allRoomParticipants []models.Participant
+	if err := ps.db.Where("room_id IN ? AND status IN ?", queryRoomIDs, []int{models.ParticipantStatusInviting, models.ParticipantStatusJoined}).
+		Find(&allRoomParticipants).Error; err != nil {
+		return nil, errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
+	}
+
+	// 按房间 ID 分组参与者
+	roomParticipantMap := make(map[string][]string)
+	for _, p := range allRoomParticipants {
+		roomParticipantMap[p.RoomID] = append(roomParticipantMap[p.RoomID], p.UID)
+	}
+
 	// 构建返回结果
 	result := make([]models.RoomResp, 0, len(rooms))
 	for _, room := range rooms {
@@ -552,15 +579,10 @@ func (ps *ParticipantService) GetUserAvailableRooms(uid string, deviceType strin
 			return nil, errors.NewBusinessErrorWithKey(i18n.TokenGenerationFailed, err.Error())
 		}
 
-		// 查询该房间的所有参与者 UIDs
-		var roomParticipants []models.Participant
-		if err := ps.db.Where("room_id = ?", room.RoomID).Find(&roomParticipants).Error; err != nil {
-			return nil, errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
-		}
-
-		uids := make([]string, 0, len(roomParticipants))
-		for _, p := range roomParticipants {
-			uids = append(uids, p.UID)
+		// 从预先查询的 map 中获取参与者 UIDs
+		uids := roomParticipantMap[room.RoomID]
+		if uids == nil {
+			uids = []string{}
 		}
 
 		result = append(result, models.RoomResp{

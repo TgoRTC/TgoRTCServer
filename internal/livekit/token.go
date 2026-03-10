@@ -7,10 +7,8 @@ import (
 	"time"
 
 	"tgo-rtc-server/internal/config"
-	"tgo-rtc-server/internal/utils"
 
 	"github.com/livekit/protocol/auth"
-	"go.uber.org/zap"
 )
 
 // ParticipantMetadata 参与者元数据
@@ -52,7 +50,6 @@ func (tg *TokenGenerator) GenerateToken(roomName, uid, deviceType string) (strin
 
 // GenerateTokenWithConfig 生成 Token 并返回配置信息
 func (tg *TokenGenerator) GenerateTokenWithConfig(roomName, uid, deviceType string) (*TokenResult, error) {
-	logger := utils.GetLogger()
 
 	token, err := tg.GenerateTokenWithExpiry(roomName, uid, deviceType)
 	if err != nil {
@@ -64,16 +61,6 @@ func (tg *TokenGenerator) GenerateTokenWithConfig(roomName, uid, deviceType stri
 		URL:     tg.clientURL, // 返回前端可访问的 URL
 		Timeout: tg.timeout,
 	}
-
-	// 记录 Token 生成和 LiveKit URL 分配信息
-	logger.Info("LiveKit Token 生成成功",
-		zap.String("room_id", roomName),
-		zap.String("uid", uid),
-		zap.String("device_type", deviceType),
-		zap.String("livekit_url", tg.clientURL),
-		zap.String("backend_url", tg.url),
-		zap.Int("timeout", tg.timeout),
-	)
 
 	return result, nil
 }

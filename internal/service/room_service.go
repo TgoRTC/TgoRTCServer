@@ -19,6 +19,7 @@ type RoomService struct {
 	tokenGenerator          *livekit.TokenGenerator
 	timeFormatter           *utils.TimeFormatter
 	participantDeduplicator *utils.ParticipantDeduplicator
+	schedulerService        *SchedulerService
 }
 
 // NewRoomService 创建房间服务
@@ -29,6 +30,11 @@ func NewRoomService(db *gorm.DB, tokenGenerator *livekit.TokenGenerator) *RoomSe
 		timeFormatter:           utils.NewTimeFormatter(),
 		participantDeduplicator: utils.NewParticipantDeduplicator(),
 	}
+}
+
+// SetSchedulerService 设置调度器服务
+func (rs *RoomService) SetSchedulerService(ss *SchedulerService) {
+	rs.schedulerService = ss
 }
 
 // CreateRoom 创建房间
@@ -145,6 +151,17 @@ func (rs *RoomService) CreateRoom(req *models.CreateRoomRequest) (*models.Create
 	if isBusy {
 		return nil, errors.NewConflictError(i18n.ParticipantInCall, busyParticipantUID)
 	}
+
+	// 为所有参与者设置超时定时器
+	if rs.schedulerService != nil {
+		// 为创建者设置定时器
+		rs.schedulerService.ScheduleParticipantTimeout(roomID, req.Creator)
+		// 为被邀请者设置定时器
+		for _, uid := range deduplicatedUIDs {
+			rs.schedulerService.ScheduleParticipantTimeout(roomID, uid)
+		}
+	}
+
 	// 生成 Token 和获取配置信息
 	tokenResult, err := rs.tokenGenerator.GenerateTokenWithConfig(roomID, req.Creator, req.DeviceType)
 	if err != nil {

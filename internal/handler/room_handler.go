@@ -72,15 +72,5 @@ func (rh *RoomHandler) CreateRoom(c *gin.Context) {
 		return
 	}
 
-	// 记录房间创建成功和 LiveKit 连接信息
-	logger.Info("房间创建成功",
-		zap.String("room_id", resp.RoomID),
-		zap.String("creator", resp.Creator),
-		zap.String("livekit_url", resp.URL),
-		zap.Strings("invited_uids", resp.UIDs),
-		zap.Uint8("status", resp.Status),
-		zap.String("language", lang),
-	)
-
 	utils.RespondWithData(c, resp)
 }

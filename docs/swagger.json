@@ -35,18 +35,8 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["source_channel_id", "creator"],
+                "required": ["creator"],
                 "properties": {
-                  "source_channel_id": {
-                    "type": "string",
-                    "example": "channel_123",
-                    "description": "来源渠道 ID"
-                  },
-                  "source_channel_type": {
-                    "type": "integer",
-                    "description": "来源渠道类型",
-                    "example": 0
-                  },
                   "creator": {
                     "type": "string",
                     "description": "房间创建者 ID",
@@ -99,14 +89,6 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "source_channel_id": {
-                      "type": "string",
-                      "description": "来源渠道 ID"
-                    },
-                    "source_channel_type": {
-                      "type": "integer",
-                      "description": "来源渠道类型"
-                    },
                     "room_id": {
                       "type": "string",
                       "description": "房间 ID"
@@ -308,14 +290,6 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "source_channel_id": {
-                      "type": "string",
-                      "description": "来源渠道 ID"
-                    },
-                    "source_channel_type": {
-                      "type": "integer",
-                      "description": "来源渠道类型"
-                    },
                     "room_id": {
                       "type": "string",
                       "description": "房间 ID"
@@ -455,14 +429,6 @@
                   "items": {
                     "type": "object",
                     "properties": {
-                      "source_channel_id": {
-                        "type": "string",
-                        "description": "来源渠道 ID"
-                      },
-                      "source_channel_type": {
-                        "type": "integer",
-                        "description": "来源渠道类型"
-                      },
                       "room_id": {
                         "type": "string",
                         "description": "房间 ID"
@@ -593,7 +559,7 @@
       "post": {
         "tags": ["业务 Webhook"],
         "summary": "业务 Webhook 回调接口",
-        "description": "TgoRTC 服务器会向业务系统配置的 Webhook URL 发送事件通知。业务系统需要实现此接口来接收事件。\n\n**请求格式：**\n- **Query 参数**: `event_type` 和 `event_id`\n- **Body**: JSON 数据（房间事件使用 `RoomEventData`，参与者事件使用 `ParticipantEventData`）\n\n**事件类型说明：**\n\n**房间事件：**\n- `room.started` - 房间已开始（第一个参与者加入时触发）\n- `room.finished` - 房间已结束（所有参与者离开或超时时触发）\n\n**参与者事件：**\n- `participant.joined` - 参与者已加入（参与者成功加入房间）\n- `participant.left` - 参与者已离开（参与者正常离开房间）\n- `participant.rejected` - 参与者已拒绝（参与者拒绝加入房间）\n- `participant.missed` - 参与者已超时（参与者未在规定时间内加入）\n- `participant.cancelled` - 参与者已取消（发起者取消了对参与者的邀请）\n- `participant.invited` - 参与者已邀请（房间中有新用户被邀请加入）",
+        "description": "TgoRTC 服务器会向业务系统配置的 Webhook URL 发送事件通知。业务系统需要实现此接口来接收事件。\n\n**请求格式：**\n- **Query 参数**: `event_type` 和 `event_id`\n- **Body**: JSON 数据（房间事件使用 `RoomEventData`，参与者事件使用 `ParticipantEventData`）\n\n**事件类型说明：**\n\n**房间事件：**\n- `room.started` - 房间已开始（第一个参与者加入时触发）\n- `room.finished` - 房间已结束（所有参与者离开或超时时触发）\n\n**参与者事件：**\n- `participant.invited` - 参与者被邀请（创建房间或邀请用户时触发，通知被邀请者有来电）\n- `participant.joined` - 参与者已加入（参与者成功加入房间）\n- `participant.left` - 参与者已离开（参与者正常离开房间）\n- `participant.rejected` - 参与者已拒绝（参与者拒绝加入房间）\n- `participant.missed` - 参与者已超时（参与者未在规定时间内加入）\n- `participant.cancelled` - 参与者已取消（发起者取消了对参与者的邀请）",
         "parameters": [
           {
             "name": "event_type",
@@ -605,12 +571,12 @@
               "enum": [
                 "room.started",
                 "room.finished",
+                "participant.invited",
                 "participant.joined",
                 "participant.left",
                 "participant.rejected",
                 "participant.missed",
-                "participant.cancelled",
-                "participant.invited"
+                "participant.cancelled"
               ]
             },
             "example": "participant.joined"
@@ -646,8 +612,6 @@
                   "summary": "房间已开始事件",
                   "description": "请求 URL: /tgortc/webhook?event_type=room.started&event_id=1704096600-abc123",
                   "value": {
-                    "source_channel_id": "channel_001",
-                    "source_channel_type": 0,
                     "room_id": "room_abc123",
                     "creator": "user_001",
                     "rtc_type": 1,
@@ -660,12 +624,27 @@
                     "updated_at": 1704096600
                   }
                 },
+                "participant.invited": {
+                  "summary": "参与者被邀请事件",
+                  "description": "请求 URL: /tgortc/webhook?event_type=participant.invited&event_id=1704096550-inv123\n\n当创建房间或邀请用户时触发，用于通知被邀请者有来电。业务系统收到此事件后应向被邀请者推送来电通知。",
+                  "value": {
+                    "room_id": "room_abc123",
+                    "creator": "user_001",
+                    "rtc_type": 1,
+                    "invite_on": 0,
+                    "status": 0,
+                    "max_participants": 2,
+                    "duration": 0,
+                    "uids": ["user_001", "user_002"],
+                    "created_at": 1704096500,
+                    "updated_at": 1704096550,
+                    "uid": "user_002"
+                  }
+                },
                 "room.finished": {
                   "summary": "房间已结束事件",
                   "description": "请求 URL: /tgortc/webhook?event_type=room.finished&event_id=1704096900-xyz789",
                   "value": {
-                    "source_channel_id": "channel_001",
-                    "source_channel_type": 0,
                     "room_id": "room_abc123",
                     "creator": "user_001",
                     "rtc_type": 1,
@@ -682,8 +661,6 @@
                   "summary": "参与者已加入事件",
                   "description": "请求 URL: /tgortc/webhook?event_type=participant.joined&event_id=1704096700-def456",
                   "value": {
-                    "source_channel_id": "channel_001",
-                    "source_channel_type": 0,
                     "room_id": "room_abc123",
                     "creator": "user_001",
                     "rtc_type": 1,
@@ -702,8 +679,6 @@
                   "summary": "参与者已离开事件",
                   "description": "请求 URL: /tgortc/webhook?event_type=participant.left&event_id=1704096800-ghi789",
                   "value": {
-                    "source_channel_id": "channel_001",
-                    "source_channel_type": 0,
                     "room_id": "room_abc123",
                     "creator": "user_001",
                     "rtc_type": 1,
@@ -715,26 +690,6 @@
                     "created_at": 1704096500,
                     "updated_at": 1704096800,
                     "uid": "user_002"
-                  }
-                },
-                "participant.invited": {
-                  "summary": "参与者已邀请事件",
-                  "description": "请求 URL: /tgortc/webhook?event_type=participant.invited&event_id=1704096850-jkl012",
-                  "value": {
-                    "source_channel_id": "channel_001",
-                    "source_channel_type": 0,
-                    "room_id": "room_abc123",
-                    "creator": "user_001",
-                    "rtc_type": 1,
-                    "invite_on": 1,
-                    "status": 1,
-                    "max_participants": 5,
-                    "duration": 0,
-                    "uids": ["user_001", "user_002", "user_003", "user_004"],
-                    "created_at": 1704096500,
-                    "updated_at": 1704096850,
-                    "uid": "user_001",
-                    "invited_uids": ["user_003", "user_004"]
                   }
                 }
               }
@@ -760,18 +715,8 @@
       "RoomEventData": {
         "type": "object",
         "description": "房间事件数据（用于 room.started、room.finished 事件）",
-        "required": ["source_channel_id", "room_id", "creator", "rtc_type", "status", "max_participants", "created_at", "updated_at"],
+        "required": ["room_id", "creator", "rtc_type", "status", "max_participants", "created_at", "updated_at"],
         "properties": {
-          "source_channel_id": {
-            "type": "string",
-            "description": "来源渠道 ID",
-            "example": "channel_001"
-          },
-          "source_channel_type": {
-            "type": "integer",
-            "description": "来源渠道类型",
-            "example": 0
-          },
           "room_id": {
             "type": "string",
             "description": "房间 ID",
@@ -832,7 +777,7 @@
       },
       "ParticipantEventData": {
         "type": "object",
-        "description": "参与者事件数据（用于 participant.joined、participant.left、participant.rejected、participant.missed、participant.cancelled、participant.invited 事件）",
+        "description": "参与者事件数据（用于 participant.invited、participant.joined、participant.left、participant.rejected、participant.missed、participant.cancelled 事件）",
         "allOf": [
           {
             "$ref": "#/components/schemas/RoomEventData"
@@ -843,29 +788,13 @@
             "properties": {
               "uid": {
                 "type": "string",
-                "description": "操作者 UID（加入者/离开者/拒绝者/邀请发起者等）",
+                "description": "操作者 UID（加入者/离开者/拒绝者等）",
                 "example": "user_002"
               },
               "device_type": {
                 "type": "string",
                 "description": "设备类型（如 app,web,pc 等）仅在participant.joined 事件中有值",
                 "example": "app"
-              },
-              "missed_uids": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "超时的参与者 UID 列表（仅在 participant.missed 事件中有值）",
-                "example": ["user_002", "user_003"]
-              },
-              "invited_uids": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "被邀请的参与者 UID 列表（仅在 participant.invited 事件中有值）",
-                "example": ["user_003", "user_004"]
               }
             }
           }

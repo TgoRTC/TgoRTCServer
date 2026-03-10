@@ -70,7 +70,7 @@ func LoadConfig() *Config {
 		}
 	}
 
-	participantTimeoutCheckInterval := 10 // 默认 10 秒
+	participantTimeoutCheckInterval := 30 // 默认 30 秒（作为精确定时器的兜底机制）
 	if interval := os.Getenv("PARTICIPANT_TIMEOUT_CHECK_INTERVAL"); interval != "" {
 		if i, err := strconv.Atoi(interval); err == nil {
 			participantTimeoutCheckInterval = i

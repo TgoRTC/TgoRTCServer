@@ -60,8 +60,6 @@ func (ps *BusinessWebhookService) checkAndFinishRoom(room *models.Room) {
 					break
 				}
 			}
-		} else {
-			// 多人通话场景
 		}
 
 		if allFinished {
@@ -80,11 +78,7 @@ func (ps *BusinessWebhookService) checkAndFinishRoom(room *models.Room) {
 			isSendWebhook = true
 		}
 	}
-	logger.Info("checkAndFinishRoom: 房间状态",
-		zap.String("room_id", room.RoomID),
-		zap.Int("room_status", int(room.Status)),
-		zap.Bool("isSendWebhook", isSendWebhook),
-	)
+
 	if isSendWebhook {
 		// 计算通话时长
 		var startTime int64 = 0
@@ -274,7 +268,7 @@ func (bws *BusinessWebhookService) sendParticipantMissed(room *models.Room, uids
 			CreatedAt:       room.CreatedAt.Unix(),
 			UpdatedAt:       room.UpdatedAt.Unix(),
 		},
-		MissedUids: uids,
+		MissedUIDs: uids,
 	}
 	uids, err := bws.getRoomParticipantsUids(room.RoomID)
 	if err != nil {
@@ -283,12 +277,13 @@ func (bws *BusinessWebhookService) sendParticipantMissed(room *models.Room, uids
 	eventData.Uids = uids
 	// 发送 participant.missed 事件
 	if err := bws.SendEvent(models.BusinessEventParticipantMissed, eventData); err != nil {
-		logger.Error("发送参与者超时事件失败",
+		logger.Error("发送业务 webhook 事件失败",
 			zap.String("room_id", room.RoomID),
-			zap.Strings("uids", uids),
 			zap.String("event_type", models.BusinessEventParticipantMissed),
+			zap.Strings("missed_uids", uids),
 			zap.Error(err),
 		)
+		// 不返回错误，继续处理其他参与者
 	}
 }
 
@@ -321,25 +316,22 @@ func (bws *BusinessWebhookService) sendParticipantCancelled(room *models.Room, u
 }
 
 // 发送参与者邀请事件
-// allUids: 房间所有成员的 UIDs
-// invitedUids: 本次邀请的成员 UIDs
-func (bws *BusinessWebhookService) sendParticipantInvited(room *models.Room, allUids []string, invitedUids []string) {
+func (bws *BusinessWebhookService) sendParticipantInvited(room *models.Room, uids []string, invitedUids []string) {
 	logger := utils.GetLogger()
-	// 构建事件数据
 	eventData := &models.ParticipantEventData{
 		RoomEventData: models.RoomEventData{
 			RoomID:          room.RoomID,
 			Creator:         room.Creator,
 			RTCType:         room.RTCType,
 			InviteOn:        room.InviteOn,
-			Status:          models.RoomStatusCancelled,
+			Status:          models.RoomStatusInProgress,
 			MaxParticipants: room.MaxParticipants,
-			Uids:            allUids,
+			Uids:            uids,
 			CreatedAt:       room.CreatedAt.Unix(),
-			UpdatedAt:       time.Now().Unix(),
+			UpdatedAt:       room.UpdatedAt.Unix(),
 		},
-		UID:         room.Creator,
-		InvitedUids: invitedUids,
+		UID:         room.Creator, // 邀请者是房间创建者
+		InvitedUIDs: invitedUids,
 	}
 	// 发送一次 webhook 事件
 	if err := bws.SendEvent(models.BusinessEventParticipantInvited, eventData); err != nil {
