@@ -199,15 +199,6 @@ func (ps *ParticipantService) LeaveRoom(req *models.LeaveRoomRequest) error {
 	if currentParticipant.Status == models.ParticipantStatusJoined || currentParticipant.LeaveTime > 0 {
 		hasJoined = true
 	}
-	logger.Info("离开房间各个状态：",
-		zap.String("room_id", req.RoomID),
-		zap.String("uid", req.UID),
-		zap.Int("joinedCount", joinedCount),
-		zap.Bool("isCreator", isCreator),
-		zap.Bool("isOneToOne", isOneToOne),
-		zap.Bool("hasJoined", hasJoined),
-		zap.Bool("hasMissedOther", hasMissedOther),
-	)
 	// 统计已加入的参与者数量
 	if isOneToOne {
 		// 一对一通话场景（MaxParticipants = 2）
