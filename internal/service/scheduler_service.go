@@ -138,26 +138,42 @@ func (ss *SchedulerService) checkParticipantTimeout() {
 		for _, p := range participants {
 			uids = append(uids, p.UID)
 		}
-		// 更新参与者状态为超时
-		if err := ss.db.Model(&models.Participant{}).
-			Where("room_id = ? AND uid IN ?", roomId, uids).
-			Update("status", models.ParticipantStatusMissed).Error; err != nil {
+		// 更新参与者状态为超时（仅更新仍处于邀请中状态的参与者，避免覆盖已加入的参与者）
+		result := ss.db.Model(&models.Participant{}).
+			Where("room_id = ? AND uid IN ? AND status = ?", roomId, uids, models.ParticipantStatusInviting).
+			Update("status", models.ParticipantStatusMissed)
+		if result.Error != nil {
 			logger.Error("检查超时的参与者--->更新参与者状态为超时失败",
 				zap.String("room_id", roomId),
-				zap.Error(err),
+				zap.Error(result.Error),
 			)
 			continue
 		}
-		// 更新房间状态为超时未接听
-		if err := ss.db.Model(&models.Room{}).
-			Where("room_id = ?", roomId).
-			Update("status", models.RoomStatusMissed).Error; err != nil {
-			logger.Error("检查超时的参与者--->更新房间状态为超时未接听失败",
+		if result.RowsAffected == 0 {
+			logger.Info("检查超时的参与者--->没有需要更新的参与者（可能已加入或状态已变更）",
+				zap.String("room_id", roomId),
+				zap.Strings("uids", uids),
+			)
+			continue
+		}
+		logger.Info("检查超时的参与者--->已更新参与者状态为超时",
+			zap.String("room_id", roomId),
+			zap.Int64("affected_rows", result.RowsAffected),
+			zap.Int("expected_count", len(uids)),
+		)
+
+		// 重新查询房间中是否还有已加入（正在通话中）的参与者
+		var activeCount int64
+		if err := ss.db.Model(&models.Participant{}).
+			Where("room_id = ? AND status = ?", roomId, models.ParticipantStatusJoined).
+			Count(&activeCount).Error; err != nil {
+			logger.Error("检查超时的参与者--->查询活跃参与者数量失败",
 				zap.String("room_id", roomId),
 				zap.Error(err),
 			)
 			continue
 		}
+
 		var room models.Room
 		for _, r := range rooms {
 			if r.RoomID == roomId {
@@ -165,8 +181,47 @@ func (ss *SchedulerService) checkParticipantTimeout() {
 				break
 			}
 		}
-		// 发送参与者超时事件
-		ss.businessWebhookService.sendParticipantMissed(&room, uids)
+
+		// 获取实际被更新为超时的参与者 UIDs
+		var actualMissedParticipants []models.Participant
+		if err := ss.db.Where("room_id = ? AND uid IN ? AND status = ?", roomId, uids, models.ParticipantStatusMissed).
+			Find(&actualMissedParticipants).Error; err != nil {
+			logger.Error("检查超时的参与者--->查询实际超时参与者失败",
+				zap.String("room_id", roomId),
+				zap.Error(err),
+			)
+			continue
+		}
+		actualMissedUids := make([]string, 0, len(actualMissedParticipants))
+		for _, p := range actualMissedParticipants {
+			actualMissedUids = append(actualMissedUids, p.UID)
+		}
+
+		if len(actualMissedUids) > 0 {
+			// 发送参与者超时事件
+			ss.businessWebhookService.sendParticipantMissed(&room, actualMissedUids)
+		}
+
+		if activeCount > 0 {
+			// 房间中还有人在通话，不更新房间状态，不发送房间完成事件
+			logger.Info("检查超时的参与者--->房间中仍有活跃参与者，跳过房间状态更新",
+				zap.String("room_id", roomId),
+				zap.Int64("active_count", activeCount),
+			)
+			continue
+		}
+
+		// 房间中没有活跃参与者了，更新房间状态为超时未接听
+		if err := ss.db.Model(&models.Room{}).
+			Where("room_id = ? AND status IN ?", roomId, []int{models.RoomStatusNotStarted, models.RoomStatusInProgress}).
+			Update("status", models.RoomStatusMissed).Error; err != nil {
+			logger.Error("检查超时的参与者--->更新房间状态为超时未接听失败",
+				zap.String("room_id", roomId),
+				zap.Error(err),
+			)
+			continue
+		}
+		room.Status = models.RoomStatusMissed
 		// 发送房间完成事件
 		ss.businessWebhookService.checkAndFinishRoom(&room)
 	}

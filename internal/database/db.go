@@ -10,6 +10,7 @@ import (
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 // InitDB 初始化数据库连接
@@ -25,7 +26,10 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 	)
 
 	// 优雅处理“Unknown database”场景：尝试自动创建数据库（仅在开发环境有效）
-	openWithDSN := func(d string) (*gorm.DB, error) { return gorm.Open(mysql.Open(d), &gorm.Config{}) }
+	gormConfig := &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	}
+	openWithDSN := func(d string) (*gorm.DB, error) { return gorm.Open(mysql.Open(d), gormConfig) }
 
 	db, err := openWithDSN(dsn)
 	if err != nil {

@@ -169,10 +169,13 @@ func (ps *ParticipantService) LeaveRoom(req *models.LeaveRoomRequest) error {
 	isCreator := room.Creator == req.UID
 	hasJoined := false
 	joinedCount := 0
+	hasMissedOther := false
 	uids := make([]string, 0, len(allParticipants))
 	for _, p := range allParticipants {
 		if p.UID == req.UID {
 			currentParticipant = p
+		} else if p.Status == models.ParticipantStatusMissed {
+			hasMissedOther = true
 		}
 		uids = append(uids, p.UID)
 		logger.Info("参与者状态",
@@ -195,27 +198,25 @@ func (ps *ParticipantService) LeaveRoom(req *models.LeaveRoomRequest) error {
 	if currentParticipant.Status == models.ParticipantStatusJoined || currentParticipant.LeaveTime > 0 {
 		hasJoined = true
 	}
-	logger.Error("离开房间各个状态：",
+	logger.Info("离开房间各个状态：",
 		zap.String("room_id", req.RoomID),
 		zap.String("uid", req.UID),
 		zap.Int("joinedCount", joinedCount),
 		zap.Bool("isCreator", isCreator),
 		zap.Bool("isOneToOne", isOneToOne),
 		zap.Bool("hasJoined", hasJoined),
+		zap.Bool("hasMissedOther", hasMissedOther),
 	)
 	// 统计已加入的参与者数量
 	if isOneToOne {
 		// 一对一通话场景（MaxParticipants = 2）
 		if isCreator {
-			// 情况1：发起者主动挂断
-			// switch joinedCount {
-			// case 1:
-			// 	// 只有发起者自己加入，对方还未加入 -> 取消通话
-			// 	return ps.handleCreatorCancelCall(&room, uids)
-			// case 2:
-			// 	// 情况3：双方都已加入 -> 结束通话挂断（走默认逻辑）
-			// }
+			if hasMissedOther {
+				// 对方已超时未接听，创建者挂断 -> 走正常挂断流程，保留超时状态
+				return ps.handleNormalHangup(&room, req.UID, uids)
+			}
 			if joinedCount <= 1 {
+				// 只有创建者自己加入，对方还在邀请中 -> 取消通话
 				return ps.handleCreatorCancelCall(&room, uids)
 			}
 		} else {
