@@ -3,14 +3,16 @@
 # LiveKit 集群节点 一键部署脚本
 #
 # 使用方式：
-#   curl -fsSL https://gitee.com/No8blackball/tgo-rtcserver/raw/main/scripts/deploy-livekit-node.sh | sudo bash -s -- \
-#       --master-ip <主服务器IP> \
-#       --redis-password <Redis密码> \
-#       --livekit-key <LiveKit API Key> \
-#       --livekit-secret <LiveKit API Secret>
-#
-# 或使用交互模式：
-#   chmod +x deploy-livekit-node.sh && sudo ./deploy-livekit-node.sh
+#   国外服务器:
+#     curl -fsSL https://raw.githubusercontent.com/TgoRTC/TgoRTCServer/main/scripts/deploy-livekit-node.sh | sudo bash -s -- \
+#         --master-ip <主服务器IP> --redis-password <Redis密码> \
+#         --livekit-key <LiveKit API Key> --livekit-secret <LiveKit API Secret>
+#   国内服务器:
+#     curl -fsSL https://gitee.com/No8blackball/tgo-rtcserver/raw/main/scripts/deploy-livekit-node.sh | sudo bash -s -- \
+#         --cn --master-ip <主服务器IP> --redis-password <Redis密码> \
+#         --livekit-key <LiveKit API Key> --livekit-secret <LiveKit API Secret>
+#   本地执行（交互模式）:
+#     chmod +x deploy-livekit-node.sh && sudo ./deploy-livekit-node.sh [--cn]
 #
 # 功能：
 #   1. 部署独立的 LiveKit 节点
@@ -409,7 +411,15 @@ LiveKit 集群节点 一键部署脚本
       --livekit-secret "Xj9K2mP5nQ8vR1wT4yU7zA0bC3dE6fG9" \
       --tgortc-url "https://api.example.com"
 
-  # 使用中国镜像加速（一键部署）
+  # 国外服务器一键部署（GitHub）
+  curl -fsSL https://raw.githubusercontent.com/TgoRTC/TgoRTCServer/main/scripts/deploy-livekit-node.sh | sudo bash -s -- \
+      --master-ip 47.117.96.203 \
+      --redis-password "TgoRedis@2025" \
+      --livekit-key "prodkey" \
+      --livekit-secret "Xj9K2mP5nQ8vR1wT4yU7zA0bC3dE6fG9" \
+      --tgortc-url "https://api.example.com"
+
+  # 国内服务器一键部署（Gitee + 中国镜像加速）
   curl -fsSL https://gitee.com/No8blackball/tgo-rtcserver/raw/main/scripts/deploy-livekit-node.sh | sudo bash -s -- \
       --cn \
       --master-ip 47.117.96.203 \
@@ -584,12 +594,18 @@ test_connections() {
     fi
     
     # 测试 TgoRTC Server 连接
-    log_info "测试 TgoRTC Server 连接 ($MASTER_IP:$TGORTC_PORT)..."
-    if curl -s --connect-timeout 5 "http://$MASTER_IP:$TGORTC_PORT/health" &>/dev/null; then
+    local tgortc_test_url=""
+    if [ -n "$TGORTC_URL" ]; then
+        tgortc_test_url="${TGORTC_URL%/}/health"
+    else
+        tgortc_test_url="http://$MASTER_IP:$TGORTC_PORT/health"
+    fi
+    log_info "测试 TgoRTC Server 连接 ($tgortc_test_url)..."
+    if curl -s --connect-timeout 5 "$tgortc_test_url" &>/dev/null; then
         log_success "TgoRTC Server 可达"
     else
-        log_warn "无法连接到 TgoRTC Server ($MASTER_IP:$TGORTC_PORT)"
-        log_warn "请确保主服务器防火墙已开放此端口"
+        log_warn "无法连接到 TgoRTC Server ($tgortc_test_url)"
+        log_warn "请确保主服务器防火墙已开放相应端口"
     fi
 }
 
@@ -668,16 +684,8 @@ services:
       retries: 3
 EOF
     log_success "创建 docker-compose.yml"
-    
-    # 构建 Webhook URL
-    local webhook_base_url=""
-    if [ -n "$TGORTC_URL" ]; then
-        # 使用用户指定的 URL（去掉末尾的斜杠）
-        webhook_base_url="${TGORTC_URL%/}"
-    else
-        # 默认使用 IP:端口
-        webhook_base_url="http://$MASTER_IP:$TGORTC_PORT"
-    fi
+
+    # 复用前面已计算的 webhook_base_url
     local webhook_url="${webhook_base_url}/api/v1/webhooks/livekit"
     
     # 创建 livekit.yaml

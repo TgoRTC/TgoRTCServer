@@ -3,9 +3,12 @@
 # TgoRTC Server 一键部署脚本
 #
 # 使用方式：
-#   curl -fsSL https://raw.githubusercontent.com/xxx/deploy.sh | bash
-#   或
-#   chmod +x deploy.sh && ./deploy.sh
+#   国外服务器:
+#     curl -fsSL https://raw.githubusercontent.com/TgoRTC/TgoRTCServer/main/scripts/deploy.sh | bash
+#   国内服务器:
+#     curl -fsSL https://gitee.com/No8blackball/tgo-rtcserver/raw/main/scripts/deploy.sh | bash -s -- --cn
+#   本地执行:
+#     chmod +x deploy.sh && ./deploy.sh [--cn]
 #
 # 功能：
 #   1. 自动生成密码和密钥
@@ -362,9 +365,11 @@ install_docker() {
     log_info "启动 Docker 服务..."
     sudo systemctl start docker
     sudo systemctl enable docker
-    
-    # 配置镜像加速器（国内服务器必需）
-    configure_docker_mirror
+
+    # 配置镜像加速器（仅国内模式）
+    if [ "$USE_CN_MIRROR" = "true" ]; then
+        configure_docker_mirror
+    fi
     
     # 将当前用户添加到 docker 组（避免每次使用 sudo）
     if [ -n "$SUDO_USER" ]; then
@@ -873,7 +878,12 @@ EOF
     # 如果是通过管道执行的，下载脚本到本地以便后续使用
     if [ ! -f "deploy.sh" ]; then
         log_info "下载部署脚本..."
-        local script_url="https://gitee.com/No8blackball/tgo-rtcserver/raw/main/scripts/deploy.sh"
+        local script_url
+        if [ "$USE_CN_MIRROR" = "true" ]; then
+            script_url="https://gitee.com/No8blackball/tgo-rtcserver/raw/main/scripts/deploy.sh"
+        else
+            script_url="https://raw.githubusercontent.com/TgoRTC/TgoRTCServer/main/scripts/deploy.sh"
+        fi
         if curl -fsSL "$script_url" -o deploy.sh 2>/dev/null; then
             chmod +x deploy.sh
             log_success "  创建 deploy.sh"
