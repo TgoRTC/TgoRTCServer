@@ -151,6 +151,19 @@ func (ps *ParticipantService) LeaveRoom(req *models.LeaveRoomRequest) error {
 		return errors.NewBusinessErrorWithKey(i18n.RoomQueryFailed, err.Error())
 	}
 
+	// 房间已经是终态（超时/取消/拒绝/结束/忙线），无需再处理
+	// 场景：定时器已标记超时 -> 通知客户端 -> 客户端调 LeaveRoom
+	switch room.Status {
+	case models.RoomStatusMissed, models.RoomStatusCancelled,
+		models.RoomStatusRejected, models.RoomStatusFinished, models.RoomStatusBusy:
+		logger.Info("房间已是终态，跳过 LeaveRoom 处理",
+			zap.String("room_id", req.RoomID),
+			zap.String("uid", req.UID),
+			zap.Uint8("status", room.Status),
+		)
+		return nil
+	}
+
 	// 查询当前参与者的状态
 	var currentParticipant models.Participant
 	// if err := ps.db.Where("room_id = ? AND uid = ?", req.RoomID, req.UID).First(&currentParticipant).Error; err != nil {

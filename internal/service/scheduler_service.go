@@ -167,7 +167,58 @@ func (ss *SchedulerService) checkSingleParticipantTimeout(roomID, uid string) {
 		return
 	}
 
-	// 检查房间中是否还有已加入的参与者
+	// 单聊场景：一方超时，整个通话结束
+	// 将房间标记为超时，所有仍在邀请中的参与者也标记为超时
+	if room.MaxParticipants == 2 {
+		// 更新房间状态为超时未接听
+		if err := ss.db.Model(&models.Room{}).
+			Where("room_id = ?", roomID).
+			Update("status", models.RoomStatusMissed).Error; err != nil {
+			logger.Error("更新房间状态为超时未接听失败",
+				zap.String("room_id", roomID),
+				zap.Error(err),
+			)
+			return
+		}
+
+		// 将所有仍在邀请中的参与者标记为超时
+		if err := ss.db.Model(&models.Participant{}).
+			Where("room_id = ? AND status = ?", roomID, models.ParticipantStatusInviting).
+			Update("status", models.ParticipantStatusMissed).Error; err != nil {
+			logger.Error("批量更新参与者状态为超时失败",
+				zap.String("room_id", roomID),
+				zap.Error(err),
+			)
+		}
+
+		// 将已加入的参与者（创建者）标记为挂断，通话已结束
+		if err := ss.db.Model(&models.Participant{}).
+			Where("room_id = ? AND status = ?", roomID, models.ParticipantStatusJoined).
+			Update("status", models.ParticipantStatusHangup).Error; err != nil {
+			logger.Error("更新已加入参与者状态为挂断失败",
+				zap.String("room_id", roomID),
+				zap.Error(err),
+			)
+		}
+
+		// 收集所有参与者 UID 用于 webhook
+		var allUIDs []string
+		ss.db.Model(&models.Participant{}).
+			Where("room_id = ?", roomID).
+			Pluck("uid", &allUIDs)
+
+		// 重新查询房间（状态已更新为 Missed）
+		ss.db.Where("room_id = ?", roomID).First(&room)
+
+		// 发送 webhook 事件
+		if ss.businessWebhookService != nil {
+			ss.businessWebhookService.sendParticipantMissed(&room, allUIDs)
+			ss.businessWebhookService.checkAndFinishRoom(&room)
+		}
+		return
+	}
+
+	// 多人通话场景：检查房间中是否还有已加入的参与者
 	var joinedCount int64
 	if err := ss.db.Model(&models.Participant{}).
 		Where("room_id = ? AND status = ?", roomID, models.ParticipantStatusJoined).

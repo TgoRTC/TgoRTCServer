@@ -148,18 +148,7 @@ func (ws *WebhookService) handleRoomFinished(event *models.WebhookEvent) error {
 	}
 	logger := utils.GetLogger()
 
-	// 更新房间状态为已结束
-	if err := ws.db.Model(&models.Room{}).
-		Where("room_id = ?", event.Room.Name).
-		Update("status", models.RoomStatusFinished).Error; err != nil {
-		logger.Error("livekit事件: 房间结束--->更新房间状态失败",
-			zap.String("room_id", event.Room.Name),
-			zap.Error(err),
-		)
-		return err
-	}
-
-	// 查询房间信息（用于后续 webhook 通知）
+	// 先查询房间当前状态
 	var room models.Room
 	if err := ws.db.Where("room_id = ?", event.Room.Name).First(&room).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -172,10 +161,30 @@ func (ws *WebhookService) handleRoomFinished(event *models.WebhookEvent) error {
 			zap.String("room_id", event.Room.Name),
 			zap.Error(err),
 		)
-		// 继续执行，不返回错误
+		return err
 	}
 
-	// 1、查询该房间中的成员，如果 status=0/1 的成员全部改成 ParticipantStatusHangup
+	// 房间已经是终态（超时/取消/拒绝等），不覆盖状态
+	if room.Status > models.RoomStatusInProgress {
+		logger.Info("livekit事件: 房间结束--->房间已是终态，跳过状态更新",
+			zap.String("room_id", event.Room.Name),
+			zap.Uint8("status", room.Status),
+		)
+		return nil
+	}
+
+	// 房间仍在进行中，更新为已结束
+	if err := ws.db.Model(&models.Room{}).
+		Where("room_id = ? AND status <= ?", event.Room.Name, models.RoomStatusInProgress).
+		Update("status", models.RoomStatusFinished).Error; err != nil {
+		logger.Error("livekit事件: 房间结束--->更新房间状态失败",
+			zap.String("room_id", event.Room.Name),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	// 将仍在 邀请中/已加入 的参与者标记为挂断
 	if err := ws.db.Model(&models.Participant{}).
 		Where("room_id = ? AND (status = ? OR status = ?)", event.Room.Name, models.ParticipantStatusInviting, models.ParticipantStatusJoined).
 		Update("status", models.ParticipantStatusHangup).Error; err != nil {
@@ -183,19 +192,11 @@ func (ws *WebhookService) handleRoomFinished(event *models.WebhookEvent) error {
 			zap.String("room_id", event.Room.Name),
 			zap.Error(err),
 		)
-		// 继续执行，不返回错误
 	}
 
-	// 如果房间状态已经结束，则跳过
-	if room.Status > models.RoomStatusInProgress {
-		return nil
-	}
-	// fixme 这里不能直接将房间状态修改为结束，要根据情况标记 结束/取消/拒绝/超时
-	//	room.Status = models.RoomStatusFinished
-	// 2、通知业务的 webhook
+	// 通知业务的 webhook
 	if ws.businessWebhookService != nil {
 		ws.businessWebhookService.checkAndFinishRoom(&room)
-		// ws.businessWebhookService.sendRoomFinished(&room)
 	}
 	return nil
 }
@@ -313,10 +314,11 @@ func (ws *WebhookService) handleParticipantLeft(event *models.WebhookEvent) erro
 		return nil
 	}
 
-	// 更新参与者状态为已挂断，并设置离开时间
+	// 更新参与者状态为已挂断，并设置离开时间（仅更新仍在 邀请中/已加入 状态的参与者）
 	var leftParticipant models.Participant
 	if err := ws.db.Model(&models.Participant{}).
-		Where("uid = ? AND room_id = ?", event.Participant.Identity, event.Room.Name).
+		Where("uid = ? AND room_id = ? AND status IN ?", event.Participant.Identity, event.Room.Name,
+			[]uint8{models.ParticipantStatusInviting, models.ParticipantStatusJoined}).
 		Updates(map[string]interface{}{
 			"status":     models.ParticipantStatusHangup,
 			"leave_time": time.Now().Unix(),
