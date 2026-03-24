@@ -1,9 +1,10 @@
 package service
 
 import (
+	"time"
+
 	"tgo-rtc-server/internal/models"
 	"tgo-rtc-server/internal/utils"
-	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -251,6 +252,10 @@ func (s *RoomLifecycleService) ResolveAndFinishRoom(room *models.Room) {
 // processParticipantLeave 共享的参与者离开处理逻辑
 // 负责：读取状态快照 → 判定业务动作 → CAS 更新 DB
 // 不负责：发送 webhook（由调用方根据 LeaveResult.Action 决定）
+//
+// 注意：快照读取和 CAS 更新之间存在时间窗口，并发入口可能基于过期快照做出判定。
+// CAS 写入保证单个状态转换的原子性，但跨参与者/房间的决策可能基于过期数据。
+// 这是 snapshot-then-CAS 模式的固有限制，通过 CAS 的幂等性和 webhook 去重来缓解。
 func (s *RoomLifecycleService) processParticipantLeave(roomID, uid string) (*LeaveResult, error) {
 	logger := utils.GetLogger()
 
@@ -303,7 +308,7 @@ func (s *RoomLifecycleService) processParticipantLeave(roomID, uid string) (*Lea
 			if !hasOtherJoined {
 				// 对方从未加入过 → 取消通话
 				result.Action = LeaveActionCancel
-				s.executeCancel(room, uid)
+				s.executeCancel(room)
 				return result, nil
 			}
 		} else if !hasJoined {
@@ -340,7 +345,7 @@ func (s *RoomLifecycleService) processParticipantLeave(roomID, uid string) (*Lea
 // ========== CAS 执行方法（由 processParticipantLeave 调用） ==========
 
 // executeCancel 执行取消操作（1v1：创建者取消）
-func (s *RoomLifecycleService) executeCancel(room *models.Room, uid string) {
+func (s *RoomLifecycleService) executeCancel(room *models.Room) {
 	// 更新所有参与者为已取消
 	s.UpdateAllParticipants(room.RoomID,
 		[]uint8{models.ParticipantStatusInviting, models.ParticipantStatusJoined},
@@ -413,7 +418,7 @@ func (s *RoomLifecycleService) executeHangup(room *models.Room, uid string, now 
 	}
 }
 
-// ========== 三个入口方法 ==========
+// ========== 四个入口方法 ==========
 
 // HandleUserLeave 处理用户主动离开（LeaveRoom API 调用）
 // 调用共享方法 processParticipantLeave 判定动作并执行 CAS 更新，
@@ -550,9 +555,15 @@ func (s *RoomLifecycleService) HandleTimeout(roomID, uid string) error {
 	} else {
 		// 多人：仅当无人在通话时标记房间为 Missed
 		var joinedCount int64
-		s.db.Model(&models.Participant{}).
+		if err := s.db.Model(&models.Participant{}).
 			Where("room_id = ? AND status = ?", roomID, models.ParticipantStatusJoined).
-			Count(&joinedCount)
+			Count(&joinedCount).Error; err != nil {
+			logger.Error("HandleTimeout: 查询已加入参与者数量失败",
+				zap.String("room_id", roomID),
+				zap.Error(err),
+			)
+			return err
+		}
 
 		if joinedCount == 0 {
 			s.CASUpdateRoom(roomID,
@@ -563,12 +574,24 @@ func (s *RoomLifecycleService) HandleTimeout(roomID, uid string) error {
 	}
 
 	// 重新查询以获取最新状态
-	s.db.Where("room_id = ?", roomID).First(&room)
+	if err := s.db.Where("room_id = ?", roomID).First(&room).Error; err != nil {
+		logger.Error("HandleTimeout: 重新查询房间失败",
+			zap.String("room_id", roomID),
+			zap.Error(err),
+		)
+		return err
+	}
 
 	var allUIDs []string
-	s.db.Model(&models.Participant{}).
+	if err := s.db.Model(&models.Participant{}).
 		Where("room_id = ?", roomID).
-		Pluck("uid", &allUIDs)
+		Pluck("uid", &allUIDs).Error; err != nil {
+		logger.Error("HandleTimeout: 查询参与者 UID 失败",
+			zap.String("room_id", roomID),
+			zap.Error(err),
+		)
+		return err
+	}
 
 	if s.businessWebhookService != nil {
 		if room.MaxParticipants == 2 {
