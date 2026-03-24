@@ -20,6 +20,7 @@ type ParticipantService struct {
 	timeFormatter          *utils.TimeFormatter
 	businessWebhookService *BusinessWebhookService
 	schedulerService       *SchedulerService
+	lifecycleService       *RoomLifecycleService
 }
 
 // NewParticipantService 创建参与者服务
@@ -35,6 +36,11 @@ func NewParticipantService(db *gorm.DB, tokenGenerator *livekit.TokenGenerator, 
 // SetSchedulerService 设置调度器服务
 func (ps *ParticipantService) SetSchedulerService(ss *SchedulerService) {
 	ps.schedulerService = ss
+}
+
+// SetLifecycleService 设置房间生命周期服务
+func (ps *ParticipantService) SetLifecycleService(ls *RoomLifecycleService) {
+	ps.lifecycleService = ls
 }
 
 // JoinRoom 参与者加入房间

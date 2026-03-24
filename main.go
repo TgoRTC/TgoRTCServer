@@ -45,13 +45,17 @@ func main() {
 	// 初始化业务 webhook 服务
 	businessWebhookService := service.NewBusinessWebhookService(db, redisClient, cfg)
 
+	// 创建房间生命周期服务（唯一实例）
+	lifecycleService := service.NewRoomLifecycleService(db, businessWebhookService)
+
 	// 创建路由（同时获取 participantService 和 roomService）
-	r, participantService, roomService := router.SetupRouter(db, redisClient, cfg, businessWebhookService)
+	r, participantService, roomService := router.SetupRouter(db, redisClient, cfg, businessWebhookService, lifecycleService)
 
 	// 启动参与者超时检查定时器
 	scheduler := service.NewSchedulerService(db, cfg)
 	scheduler.SetBusinessWebhookService(businessWebhookService)
 	scheduler.SetParticipantService(participantService)
+	scheduler.SetLifecycleService(lifecycleService)
 
 	// 设置 scheduler 到各个服务（用于精确定时器）
 	participantService.SetSchedulerService(scheduler)

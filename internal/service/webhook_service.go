@@ -21,6 +21,7 @@ type WebhookService struct {
 	redisClient            *redis.Client
 	config                 *config.Config
 	businessWebhookService *BusinessWebhookService
+	lifecycleService       *RoomLifecycleService
 }
 
 // NewWebhookService 创建 webhook 服务
@@ -35,6 +36,11 @@ func NewWebhookService(db *gorm.DB, redisClient *redis.Client, cfg *config.Confi
 // SetBusinessWebhookService 设置业务 webhook 服务
 func (ws *WebhookService) SetBusinessWebhookService(bws *BusinessWebhookService) {
 	ws.businessWebhookService = bws
+}
+
+// SetLifecycleService 设置房间生命周期服务
+func (ws *WebhookService) SetLifecycleService(ls *RoomLifecycleService) {
+	ws.lifecycleService = ls
 }
 
 // HandleWebhookEvent 处理 webhook 事件

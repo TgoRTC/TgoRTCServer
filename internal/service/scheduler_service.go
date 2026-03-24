@@ -21,6 +21,7 @@ type SchedulerService struct {
 	businessWebhookService  *BusinessWebhookService
 	participantService      *ParticipantService
 	participantDeduplicator *utils.ParticipantDeduplicator
+	lifecycleService        *RoomLifecycleService
 
 	// 精确定时器相关
 	timersMu sync.RWMutex
@@ -46,6 +47,11 @@ func (ss *SchedulerService) SetBusinessWebhookService(bws *BusinessWebhookServic
 // SetParticipantService 设置参与者服务
 func (ss *SchedulerService) SetParticipantService(ps *ParticipantService) {
 	ss.participantService = ps
+}
+
+// SetLifecycleService 设置房间生命周期服务
+func (ss *SchedulerService) SetLifecycleService(ls *RoomLifecycleService) {
+	ss.lifecycleService = ls
 }
 
 // Start 启动定时器
