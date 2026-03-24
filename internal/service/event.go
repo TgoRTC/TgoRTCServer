@@ -316,7 +316,7 @@ func (bws *BusinessWebhookService) sendParticipantCancelled(room *models.Room, u
 }
 
 // 发送参与者邀请事件
-func (bws *BusinessWebhookService) sendParticipantInvited(room *models.Room, uids []string, invitedUids []string) {
+func (bws *BusinessWebhookService) sendParticipantInvited(room *models.Room, uids []string, invitedUids []string, inviteUID string) {
 	logger := utils.GetLogger()
 	eventData := &models.ParticipantEventData{
 		RoomEventData: models.RoomEventData{
@@ -330,7 +330,7 @@ func (bws *BusinessWebhookService) sendParticipantInvited(room *models.Room, uid
 			CreatedAt:       room.CreatedAt.Unix(),
 			UpdatedAt:       room.UpdatedAt.Unix(),
 		},
-		UID:         room.Creator, // 邀请者是房间创建者
+		UID:         inviteUID, // 邀请者不一定是房间创建者，有可能是其他参与者
 		InvitedUIDs: invitedUids,
 	}
 	// 发送一次 webhook 事件

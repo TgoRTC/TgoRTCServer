@@ -1,7 +1,19 @@
 {
   "permissions": {
     "allow": [
-      "Bash(go build:*)"
+      "Bash(go build:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(gh api:*)",
+      "Bash(gh search:*)",
+      "Bash(gh issue:*)",
+      "Bash(find /Users/songlun/Desktop/workspace/Go/TgoRTCServer -type f -name \"*service*\" -o -name \"*webhook*service*\" | grep -E \"\\\\.go$\")",
+      "Bash(grep -A 20 \"func.*UpdateRoomStatus\\\\|func.*UpdateParticipantStatus\" /Users/songlun/Desktop/workspace/Go/TgoRTCServer/internal/handler/*.go)",
+      "Bash(grep -n \"^type Room struct\\\\|^const.*RoomStatus\" /Users/songlun/Desktop/workspace/Go/TgoRTCServer/internal/models/*.go | head -50)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(go vet:*)",
+      "Bash(git push:*)"
     ]
   }
 }

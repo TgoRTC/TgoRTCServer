@@ -226,6 +226,10 @@
                     "items": {
                       "type": "string"
                     }
+                  },
+                  "invite_uid": {
+                    "type": "string",
+                    "description": "邀请者 UID"
                   }
                 }
               }

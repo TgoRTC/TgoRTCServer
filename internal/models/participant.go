@@ -36,7 +36,7 @@ const (
 // JoinRoomRequest 加入房间请求
 // room_id 从 URL 参数中获取: POST /api/v1/rooms/:room_id/join
 type JoinRoomRequest struct {
-	RoomID     string `json:"room_id"`    // 从 URL 参数中设置
+	RoomID     string `json:"room_id"` // 从 URL 参数中设置
 	UID        string `json:"uid" binding:"required"`
 	DeviceType string `json:"device_type"` // 设备类型
 }
@@ -53,8 +53,9 @@ type LeaveRoomRequest struct {
 
 // InviteParticipantRequest 邀请参与者请求
 type InviteParticipantRequest struct {
-	RoomID string   `json:"room_id"`
-	UIDs   []string `json:"uids" binding:"required"`
+	RoomID    string   `json:"room_id"`
+	InviteUID string   `json:"invite_uid"` // 邀请者UID
+	UIDs      []string `json:"uids" binding:"required"`
 }
 
 // GetParticipantsResponse 获取参与者列表响应

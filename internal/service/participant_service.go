@@ -421,6 +421,9 @@ func (ps *ParticipantService) InviteParticipants(req *models.InviteParticipantRe
 		return errors.NewBusinessErrorWithKey(i18n.ParticipantQueryFailed, err.Error())
 	}
 
+	// 判断邀请者是否在房间里
+	var inviteParticipant models.Participant
+
 	// 检查当前房间参与者人数（包括邀请中和已加入的）
 	var currentParticipantCount int64
 	// 这里直接用已查到的 roomParticipants 计算当前人数（只统计邀请中和已加入的）
@@ -429,6 +432,13 @@ func (ps *ParticipantService) InviteParticipants(req *models.InviteParticipantRe
 		if p.Status == models.ParticipantStatusInviting || p.Status == models.ParticipantStatusJoined {
 			currentParticipantCount++
 		}
+		if p.UID == req.InviteUID {
+			inviteParticipant = p
+		}
+	}
+	// 邀请者不在房间里
+	if inviteParticipant.ID == 0 {
+		return errors.NewBusinessErrorWithKey(i18n.ParticipantNotFound, req.InviteUID)
 	}
 
 	// 检查邀请后是否会超过最大人数
@@ -500,7 +510,7 @@ func (ps *ParticipantService) InviteParticipants(req *models.InviteParticipantRe
 				joinedUids = append(joinedUids, p.UID)
 			}
 		}
-		ps.businessWebhookService.sendParticipantInvited(&room, joinedUids, req.UIDs)
+		ps.businessWebhookService.sendParticipantInvited(&room, joinedUids, req.UIDs, req.InviteUID)
 	}
 
 	return nil
