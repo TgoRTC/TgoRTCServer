@@ -211,18 +211,28 @@ func (ws *WebhookService) handleParticipantJoined(event *models.WebhookEvent) er
 			return err
 		}
 	} else {
-		// 参与者已存在，更新状态为已加入
-		if err := ws.db.Model(&participant).Updates(map[string]interface{}{
-			"status":      models.ParticipantStatusJoined,
-			"join_time":   time.Now().Unix(),
-			"device_type": deviceType,
-		}).Error; err != nil {
+		// 参与者已存在，CAS 更新：仅从 Inviting 状态更新为 Joined（防止覆盖终态）
+		result := ws.db.Model(&models.Participant{}).
+			Where("room_id = ? AND uid = ? AND status = ?", event.Room.Name, event.Participant.Identity, models.ParticipantStatusInviting).
+			Updates(map[string]interface{}{
+				"status":      models.ParticipantStatusJoined,
+				"join_time":   time.Now().Unix(),
+				"device_type": deviceType,
+			})
+		if result.Error != nil {
 			logger.Error("更新参与者状态失败",
 				zap.String("room_id", event.Room.Name),
 				zap.String("uid", event.Participant.Identity),
-				zap.Error(err),
+				zap.Error(result.Error),
 			)
-			return err
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			logger.Info("参与者状态已非 Inviting，跳过 Joined 更新",
+				zap.String("room_id", event.Room.Name),
+				zap.String("uid", event.Participant.Identity),
+				zap.Uint8("current_status", participant.Status),
+			)
 		}
 	}
 

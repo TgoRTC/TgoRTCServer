@@ -3,6 +3,7 @@ package service
 import (
 	"time"
 
+	"tgo-rtc-server/internal/config"
 	"tgo-rtc-server/internal/models"
 	"tgo-rtc-server/internal/utils"
 
@@ -14,13 +15,15 @@ import (
 // 统一管理房间和参与者的状态转换，使用 CAS 防止竞态
 type RoomLifecycleService struct {
 	db                     *gorm.DB
+	config                 *config.Config
 	businessWebhookService *BusinessWebhookService
 }
 
 // NewRoomLifecycleService 创建房间生命周期服务
-func NewRoomLifecycleService(db *gorm.DB, businessWebhookService *BusinessWebhookService) *RoomLifecycleService {
+func NewRoomLifecycleService(db *gorm.DB, cfg *config.Config, businessWebhookService *BusinessWebhookService) *RoomLifecycleService {
 	return &RoomLifecycleService{
 		db:                     db,
+		config:                 cfg,
 		businessWebhookService: businessWebhookService,
 	}
 }
@@ -35,6 +38,7 @@ const (
 	LeaveActionCancel                     // 创建者取消通话
 	LeaveActionReject                     // 参与者拒绝通话
 	LeaveActionHangup                     // 正常挂断
+	LeaveActionMissed                     // 超时未接听（客户端超时先于服务端定时器）
 )
 
 // LeaveResult processParticipantLeave 的返回结果
@@ -76,6 +80,16 @@ func hasMissedParticipant(participants []models.Participant, excludeUID string) 
 		}
 	}
 	return false
+}
+
+// findOtherParticipant 在参与者列表中查找除指定 UID 外的其他参与者（用于 1v1 场景）
+func findOtherParticipant(participants []models.Participant, excludeUID string) *models.Participant {
+	for i := range participants {
+		if participants[i].UID != excludeUID {
+			return &participants[i]
+		}
+	}
+	return nil
 }
 
 // hasOtherJoinedParticipant 检查是否有其他参与者曾经加入过
@@ -140,7 +154,7 @@ func (s *RoomLifecycleService) CASUpdateParticipant(
 	}
 
 	result := s.db.Model(&models.Participant{}).
-		Where("room_id = ? AND uid = ? AND status IN ?", roomID, uid, fromStatus).
+		Where("room_id = ? AND uid = ? AND status IN (?)", roomID, uid, fromStatus).
 		Updates(updates)
 
 	if result.Error != nil {
@@ -166,7 +180,7 @@ func (s *RoomLifecycleService) CASUpdateRoom(
 	logger := utils.GetLogger()
 
 	result := s.db.Model(&models.Room{}).
-		Where("room_id = ? AND status IN ?", roomID, fromStatus).
+		Where("room_id = ? AND status IN (?)", roomID, fromStatus).
 		Update("status", toStatus)
 
 	if result.Error != nil {
@@ -195,7 +209,7 @@ func (s *RoomLifecycleService) UpdateOtherParticipants(
 	}
 
 	if err := s.db.Model(&models.Participant{}).
-		Where("room_id = ? AND uid != ? AND status IN ?", roomID, excludeUID, fromStatus).
+		Where("room_id = ? AND uid != ? AND status IN (?)", roomID, excludeUID, fromStatus).
 		Updates(updates).Error; err != nil {
 		logger.Error("更新其他参与者状态失败",
 			zap.String("room_id", roomID),
@@ -220,7 +234,7 @@ func (s *RoomLifecycleService) UpdateAllParticipants(
 	}
 
 	if err := s.db.Model(&models.Participant{}).
-		Where("room_id = ? AND status IN ?", roomID, fromStatus).
+		Where("room_id = ? AND status IN (?)", roomID, fromStatus).
 		Updates(updates).Error; err != nil {
 		logger.Error("更新所有参与者状态失败",
 			zap.String("room_id", roomID),
@@ -295,7 +309,15 @@ func (s *RoomLifecycleService) processParticipantLeave(roomID, uid string) (*Lea
 				return result, nil
 			}
 			if !hasOtherJoined {
-				// 对方从未加入过 → 取消通话
+				// 检查是否为超时场景（客户端超时先于服务端 HandleTimeout 执行）
+				other := findOtherParticipant(snapshot.Participants, uid)
+				if other != nil && time.Now().Unix()-other.CreatedAt.Unix() >= int64(s.config.LiveKitTimeout) {
+					// 已达到超时时间 → 按超时处理
+					result.Action = LeaveActionMissed
+					s.executeMissed(room, uid)
+					return result, nil
+				}
+				// 未达到超时时间 → 取消通话
 				result.Action = LeaveActionCancel
 				s.executeCancel(room)
 				return result, nil
@@ -363,6 +385,26 @@ func (s *RoomLifecycleService) executeCancelAll(room *models.Room) {
 	room.Status = models.RoomStatusCancelled
 }
 
+// executeMissed 执行超时处理（1v1：客户端超时先于服务端定时器触发）
+func (s *RoomLifecycleService) executeMissed(room *models.Room, creatorUID string) {
+	// 标记被叫方为超时（从 Inviting）
+	s.UpdateOtherParticipants(room.RoomID, creatorUID,
+		[]uint8{models.ParticipantStatusInviting},
+		models.ParticipantStatusMissed, nil)
+
+	// 标记创建者为挂断（从 Joined，不设置 leave_time，与 HandleTimeout 保持一致）
+	s.CASUpdateParticipant(room.RoomID, creatorUID,
+		[]uint8{models.ParticipantStatusJoined},
+		models.ParticipantStatusHangup, nil)
+
+	// 标记房间为超时
+	s.CASUpdateRoom(room.RoomID,
+		[]uint8{models.RoomStatusNotStarted, models.RoomStatusInProgress},
+		models.RoomStatusMissed)
+
+	room.Status = models.RoomStatusMissed
+}
+
 // executeReject 执行拒绝操作
 func (s *RoomLifecycleService) executeReject(room *models.Room, uid string) {
 	// CAS 更新当前参与者为已拒绝
@@ -427,6 +469,8 @@ func (s *RoomLifecycleService) HandleUserLeave(roomID, uid string) error {
 			s.businessWebhookService.sendParticipantCancelled(result.Room, result.UIDs)
 		case LeaveActionReject:
 			s.businessWebhookService.sendParticipantRejected(result.Room, uid, result.UIDs)
+		case LeaveActionMissed:
+			s.businessWebhookService.sendParticipantMissed(result.Room, result.UIDs)
 		}
 		s.ResolveAndFinishRoom(result.Room)
 	}
@@ -452,6 +496,11 @@ func (s *RoomLifecycleService) HandleMediaDisconnect(roomID, uid string) error {
 		// 如果是取消动作（多人通话创建者离开无人加入），额外发送 cancelled
 		if result.Action == LeaveActionCancel {
 			s.businessWebhookService.sendParticipantCancelled(result.Room, result.UIDs)
+		}
+
+		// 如果是超时动作（客户端超时先于服务端定时器），额外发送 missed
+		if result.Action == LeaveActionMissed {
+			s.businessWebhookService.sendParticipantMissed(result.Room, result.UIDs)
 		}
 
 		if result.Action != LeaveActionSkipped {

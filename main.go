@@ -46,7 +46,7 @@ func main() {
 	businessWebhookService := service.NewBusinessWebhookService(db, redisClient, cfg)
 
 	// 创建房间生命周期服务（唯一实例）
-	lifecycleService := service.NewRoomLifecycleService(db, businessWebhookService)
+	lifecycleService := service.NewRoomLifecycleService(db, cfg, businessWebhookService)
 
 	// 创建路由（同时获取 participantService 和 roomService）
 	r, participantService, roomService := router.SetupRouter(db, redisClient, cfg, businessWebhookService, lifecycleService)
