@@ -560,6 +560,10 @@ components:
       required:
         - uids
       properties:
+        invite_uid:
+          type: string
+          description: 邀请者 UID
+          example: "user_001"
         uids:
           type: array
           items:
