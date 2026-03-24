@@ -53,8 +53,6 @@ func main() {
 
 	// 启动参与者超时检查定时器
 	scheduler := service.NewSchedulerService(db, cfg)
-	scheduler.SetBusinessWebhookService(businessWebhookService)
-	scheduler.SetParticipantService(participantService)
 	scheduler.SetLifecycleService(lifecycleService)
 
 	// 设置 scheduler 到各个服务（用于精确定时器）
