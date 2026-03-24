@@ -53,13 +53,13 @@ type RoomSnapshot struct {
 
 // ========== 工具函数 ==========
 
-// IsRoomTerminal 判断房间是否已进入终态
-func IsRoomTerminal(status uint8) bool {
+// isRoomTerminal 判断房间是否已进入终态
+func isRoomTerminal(status uint8) bool {
 	return status > models.RoomStatusInProgress
 }
 
-// FindParticipant 在参与者列表中查找指定 UID 的参与者
-func FindParticipant(participants []models.Participant, uid string) *models.Participant {
+// findParticipant 在参与者列表中查找指定 UID 的参与者
+func findParticipant(participants []models.Participant, uid string) *models.Participant {
 	for i := range participants {
 		if participants[i].UID == uid {
 			return &participants[i]
@@ -68,19 +68,8 @@ func FindParticipant(participants []models.Participant, uid string) *models.Part
 	return nil
 }
 
-// CountJoinedParticipants 统计房间中已加入（Joined 或 Hangup）的参与者数量
-func CountJoinedParticipants(participants []models.Participant) int {
-	count := 0
-	for _, p := range participants {
-		if p.Status == models.ParticipantStatusJoined || p.Status == models.ParticipantStatusHangup {
-			count++
-		}
-	}
-	return count
-}
-
-// HasMissedParticipant 检查是否有超时参与者（排除指定 UID）
-func HasMissedParticipant(participants []models.Participant, excludeUID string) bool {
+// hasMissedParticipant 检查是否有超时参与者（排除指定 UID）
+func hasMissedParticipant(participants []models.Participant, excludeUID string) bool {
 	for _, p := range participants {
 		if p.UID != excludeUID && p.Status == models.ParticipantStatusMissed {
 			return true
@@ -89,8 +78,8 @@ func HasMissedParticipant(participants []models.Participant, excludeUID string) 
 	return false
 }
 
-// HasOtherJoinedParticipant 检查是否有其他参与者曾经加入过
-func HasOtherJoinedParticipant(participants []models.Participant, excludeUID string) bool {
+// hasOtherJoinedParticipant 检查是否有其他参与者曾经加入过
+func hasOtherJoinedParticipant(participants []models.Participant, excludeUID string) bool {
 	for _, p := range participants {
 		if p.UID != excludeUID && (p.Status == models.ParticipantStatusJoined || p.Status == models.ParticipantStatusHangup || p.LeaveTime > 0) {
 			return true
@@ -269,7 +258,7 @@ func (s *RoomLifecycleService) processParticipantLeave(roomID, uid string) (*Lea
 	}
 
 	room := &snapshot.Room
-	if IsRoomTerminal(room.Status) {
+	if isRoomTerminal(room.Status) {
 		logger.Info("processParticipantLeave: 房间已是终态",
 			zap.String("room_id", roomID),
 			zap.String("uid", uid),
@@ -278,7 +267,7 @@ func (s *RoomLifecycleService) processParticipantLeave(roomID, uid string) (*Lea
 		return &LeaveResult{Action: LeaveActionSkipped, Room: room, UIDs: snapshot.UIDs}, nil
 	}
 
-	current := FindParticipant(snapshot.Participants, uid)
+	current := findParticipant(snapshot.Participants, uid)
 	if current == nil {
 		logger.Warn("processParticipantLeave: 参与者不存在",
 			zap.String("room_id", roomID),
@@ -290,8 +279,8 @@ func (s *RoomLifecycleService) processParticipantLeave(roomID, uid string) (*Lea
 	isOneToOne := room.MaxParticipants == 2
 	isCreator := room.Creator == uid
 	hasJoined := current.Status == models.ParticipantStatusJoined || current.LeaveTime > 0
-	hasMissedOther := HasMissedParticipant(snapshot.Participants, uid)
-	hasOtherJoined := HasOtherJoinedParticipant(snapshot.Participants, uid)
+	hasMissedOther := hasMissedParticipant(snapshot.Participants, uid)
+	hasOtherJoined := hasOtherJoinedParticipant(snapshot.Participants, uid)
 
 	now := time.Now().Unix()
 	result := &LeaveResult{Room: room, UIDs: snapshot.UIDs}
@@ -486,7 +475,7 @@ func (s *RoomLifecycleService) HandleRoomClosed(roomID string) error {
 	}
 
 	// 房间已终态，不覆盖
-	if IsRoomTerminal(room.Status) {
+	if isRoomTerminal(room.Status) {
 		return nil
 	}
 
@@ -532,7 +521,7 @@ func (s *RoomLifecycleService) HandleTimeout(roomID, uid string) error {
 		return err
 	}
 
-	if IsRoomTerminal(room.Status) {
+	if isRoomTerminal(room.Status) {
 		return nil
 	}
 

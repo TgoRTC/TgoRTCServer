@@ -130,7 +130,14 @@ func (ss *SchedulerService) checkSingleParticipantTimeout(roomID, uid string) {
 	ss.timersMu.Unlock()
 
 	if ss.lifecycleService != nil {
-		ss.lifecycleService.HandleTimeout(roomID, uid)
+		if err := ss.lifecycleService.HandleTimeout(roomID, uid); err != nil {
+			logger := utils.GetLogger()
+			logger.Error("精确定时器超时处理失败",
+				zap.String("room_id", roomID),
+				zap.String("uid", uid),
+				zap.Error(err),
+			)
+		}
 	}
 }
 
@@ -155,7 +162,13 @@ func (ss *SchedulerService) checkParticipantTimeout() {
 		timeDiff := time.Now().Unix() - p.CreatedAt.Unix()
 		if timeDiff >= int64(ss.config.LiveKitTimeout) {
 			if ss.lifecycleService != nil {
-				ss.lifecycleService.HandleTimeout(p.RoomID, p.UID)
+				if err := ss.lifecycleService.HandleTimeout(p.RoomID, p.UID); err != nil {
+					logger.Error("兜底超时处理失败",
+						zap.String("room_id", p.RoomID),
+						zap.String("uid", p.UID),
+						zap.Error(err),
+					)
+				}
 			}
 		}
 	}
