@@ -13,7 +13,10 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(go vet:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(go get:*)",
+      "WebSearch",
+      "Bash(go version:*)"
     ]
   }
 }

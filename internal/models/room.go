@@ -6,15 +6,16 @@ import (
 
 // Room 房间模型
 type Room struct {
-	ID      int    `gorm:"primaryKey" json:"id"`
-	Creator string `gorm:"column:creator;size:40;not null;default:''" json:"creator"`
-	RoomID            string    `gorm:"column:room_id;size:40;not null;default:'';uniqueIndex" json:"room_id"`
-	RTCType           uint8     `gorm:"column:rtc_type;not null;default:0" json:"rtc_type"`                 // 0: 语音, 1: 视频
-	InviteOn          uint8     `gorm:"column:invite_on;not null;default:0" json:"invite_on"`               // 0: 否, 1: 是
-	Status            uint8     `gorm:"column:status;not null;default:0" json:"status"`                     // 0: 未开始, 1: 进行中, 2: 已结束, 3: 已取消
-	MaxParticipants   int       `gorm:"column:max_participants;not null;default:2" json:"max_participants"` // 最多参与者数
-	CreatedAt         time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
-	UpdatedAt         time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
+	ID              int       `gorm:"primaryKey" json:"id"`
+	Creator         string    `gorm:"column:creator;size:40;not null;default:''" json:"creator"`
+	RoomID          string    `gorm:"column:room_id;size:40;not null;default:'';uniqueIndex" json:"room_id"`
+	RTCType         uint8     `gorm:"column:rtc_type;not null;default:0" json:"rtc_type"`                 // 0: 语音, 1: 视频
+	InviteOn        uint8     `gorm:"column:invite_on;not null;default:0" json:"invite_on"`               // 0: 否, 1: 是
+	Status          uint8     `gorm:"column:status;not null;default:0" json:"status"`                     // 0: 未开始, 1: 进行中, 2: 已结束, 3: 已取消
+	MaxParticipants int       `gorm:"column:max_participants;not null;default:2" json:"max_participants"` // 最多参与者数
+	CallMode        uint8     `gorm:"column:call_mode;not null;default:0" json:"call_mode"`               // 0: 普通通话, 1: AI通话
+	CreatedAt       time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	UpdatedAt       time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 }
 
 // TableName 指定表名
@@ -39,6 +40,12 @@ const (
 	RTCTypeVideo = 1 // 视频
 )
 
+// CallMode 通话模式常量
+const (
+	CallModeNormal = 0 // 普通通话
+	CallModeAI     = 1 // AI通话
+)
+
 // InviteStatus 邀请状态常量
 const (
 	InviteDisabled = 0 // 不开启邀请
@@ -47,27 +54,28 @@ const (
 
 // CreateRoomRequest 创建房间请求
 type CreateRoomRequest struct {
-	Creator string `json:"creator" binding:"required"`
-	RoomID            string   `json:"room_id"`          // 可选，不传则自动生成 UUID
-	RTCType           uint8    `json:"rtc_type"`         // 0: 语音, 1: 视频
-	InviteOn          uint8    `json:"invite_on"`        // 0: 否, 1: 是
-	MaxParticipants   int      `json:"max_participants"` // 最多参与者数，默认 2
-	UIDs              []string `json:"uids"`             // 邀请的用户 ID 列表
-	DeviceType        string   `json:"device_type"`      // 设备类型
+	Creator         string   `json:"creator" binding:"required"`
+	RoomID          string   `json:"room_id"`          // 可选，不传则自动生成 UUID
+	RTCType         uint8    `json:"rtc_type"`         // 0: 语音, 1: 视频
+	InviteOn        uint8    `json:"invite_on"`        // 0: 否, 1: 是
+	MaxParticipants int      `json:"max_participants"` // 最多参与者数，默认 2
+	UIDs            []string `json:"uids"`             // 邀请的用户 ID 列表
+	DeviceType      string   `json:"device_type"`      // 设备类型
+	CallMode        uint8    `json:"call_mode"`        // 0: 普通通话(默认), 1: AI通话
 }
 
 // RoomResp 房间响应（创建房间和加入房间共用）
 type RoomResp struct {
-	RoomID  string `json:"room_id"`
-	Creator           string   `json:"creator"`
-	Token             string   `json:"token"`
-	URL               string   `json:"url"`
-	Status            uint8    `json:"status"`
-	CreatedAt         string   `json:"created_at"` // yyyy-mm-dd hh:mm:ss 格式
-	MaxParticipants   int      `json:"max_participants"`
-	Timeout           int      `json:"timeout"`  // 单位：秒
-	UIDs              []string `json:"uids"`     // 参与者uids
-	RTCType           uint8    `json:"rtc_type"` // 0: 语音, 1: 视频
+	RoomID          string   `json:"room_id"`
+	Creator         string   `json:"creator"`
+	Token           string   `json:"token"`
+	URL             string   `json:"url"`
+	Status          uint8    `json:"status"`
+	CreatedAt       string   `json:"created_at"` // yyyy-mm-dd hh:mm:ss 格式
+	MaxParticipants int      `json:"max_participants"`
+	Timeout         int      `json:"timeout"`  // 单位：秒
+	UIDs            []string `json:"uids"`     // 参与者uids
+	RTCType         uint8    `json:"rtc_type"` // 0: 语音, 1: 视频
 }
 
 // CreateRoomResponse 创建房间响应（别名，保持向后兼容）

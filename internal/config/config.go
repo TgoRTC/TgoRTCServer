@@ -39,7 +39,8 @@ type Config struct {
 	LiveKitClientURL string // 前端连接 LiveKit 的地址（公网地址）
 	LiveKitAPIKey    string
 	LiveKitAPISecret string
-	LiveKitTimeout   int // 单位：秒
+	LiveKitTimeout   int    // 单位：秒
+	LiveKitAgentName string // AI Agent 名称
 
 	// 参与者超时配置
 	ParticipantTimeoutCheckInterval int // 检查间隔，单位：秒，默认 10 秒
@@ -170,6 +171,7 @@ func LoadConfig() *Config {
 		LiveKitAPIKey:    getEnv("LIVEKIT_API_KEY", ""),
 		LiveKitAPISecret: getEnv("LIVEKIT_API_SECRET", ""),
 		LiveKitTimeout:   liveKitTimeout,
+		LiveKitAgentName: getEnv("LIVEKIT_AGENT_NAME", ""),
 
 		// 参与者超时配置
 		ParticipantTimeoutCheckInterval: participantTimeoutCheckInterval,

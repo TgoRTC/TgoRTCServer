@@ -22,11 +22,12 @@ func SetupRouter(db *gorm.DB, redisClient *redis.Client, cfg *config.Config, bus
 	// 添加多语言中间件
 	router.Use(middleware.LanguageMiddleware())
 
-	// 初始化 Token 生成器
+	// 初始化 Token 生成器和 Agent 调度器
 	tokenGenerator := livekit.NewTokenGenerator(cfg)
+	agentDispatcher := livekit.NewAgentDispatcher(cfg)
 
 	// 初始化服务层
-	roomService := service.NewRoomService(db, tokenGenerator)
+	roomService := service.NewRoomService(db, tokenGenerator, agentDispatcher)
 	participantService := service.NewParticipantService(db, tokenGenerator, businessWebhookService)
 
 	// 初始化处理器
